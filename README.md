@@ -1,0 +1,1 @@
+# Locations_script_detail
