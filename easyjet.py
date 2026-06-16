@@ -327,7 +327,7 @@ class easyjet:
                     return iata, None, ""
 
                 iata_codes = list(airportsdata.load("IATA").keys())
-                #for sample input for debuging
+                # for sample input for debuging
                 # iata_codes=['ATL','HNL']
                 with ThreadPoolExecutor(max_workers=100) as executor:
                     futures = [executor.submit(fetch_iata, iata) for iata in iata_codes]
@@ -412,16 +412,15 @@ class easyjet:
                 "city": city,
                 "region": region,
                 "priority_level": "",
-                "location_term": '',
+                "location_term": "",
                 "location_name": locationname,
             }
             # print(row)
             rows.append(row)
 
 
-
 if __name__ == "__main__":
-    SC=None
+    SC = None
     try:
         # SC = easyjet(0, 137, 137, "input_locations", "locations", False, "20")
 
@@ -453,4 +452,3 @@ if __name__ == "__main__":
     finally:
         if SC:
             SC.conn_close()
-
