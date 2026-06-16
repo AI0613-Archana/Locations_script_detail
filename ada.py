@@ -4,28 +4,29 @@ import pandas as pd
 import requests
 import re
 
+
 def get_agency_id(lat, lon, radius=50, vehicle_type="truck"):
     cookies = {
-        'NEXT_LOCALE': 'fr',
-        'sp_i': '19cffb9697534b7d6102d66',
-        'axeptio_cookies': '{%22$$token%22:%22eTcncXcSJd7xtqsNNj03KrvTaP%22%2C%22$$date%22:%222026-03-18T06:54:33.397Z%22%2C%22$$cookiesVersion%22:{}%2C%22$$completed%22:false}',
-        'axeptio_authorized_vendors': '%2C%2C',
-        'axeptio_all_vendors': '%2C%2C',
-        'accessToken': '%7B%22accessToken%22%3A%22YOUR_TOKEN%22%7D',
-        'isUpsell': 'false',
+        "NEXT_LOCALE": "fr",
+        "sp_i": "19cffb9697534b7d6102d66",
+        "axeptio_cookies": "{%22$$token%22:%22eTcncXcSJd7xtqsNNj03KrvTaP%22%2C%22$$date%22:%222026-03-18T06:54:33.397Z%22%2C%22$$cookiesVersion%22:{}%2C%22$$completed%22:false}",
+        "axeptio_authorized_vendors": "%2C%2C",
+        "axeptio_all_vendors": "%2C%2C",
+        "accessToken": "%7B%22accessToken%22%3A%22YOUR_TOKEN%22%7D",
+        "isUpsell": "false",
     }
 
     headers = {
-        'accept': 'text/x-component',
-        'content-type': 'text/plain;charset=UTF-8',
-        'next-action': '7864189d02824d2a4b3a3c95f42bef772b97285a64',
-        'origin': 'https://www.ada.fr',
-        'referer': 'https://www.ada.fr/?type=truck',
-        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64)',
+        "accept": "text/x-component",
+        "content-type": "text/plain;charset=UTF-8",
+        "next-action": "7864189d02824d2a4b3a3c95f42bef772b97285a64",
+        "origin": "https://www.ada.fr",
+        "referer": "https://www.ada.fr/?type=truck",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64)",
     }
 
     params = {
-        'type': vehicle_type,
+        "type": vehicle_type,
     }
 
     # 🔥 Dynamic payload
@@ -33,12 +34,12 @@ def get_agency_id(lat, lon, radius=50, vehicle_type="truck"):
 
     try:
         response = requests.post(
-            'https://www.ada.fr/',
+            "https://www.ada.fr/",
             params=params,
             cookies=cookies,
             headers=headers,
             data=data,
-            timeout=15
+            timeout=15,
         )
 
         if response.status_code != 200:
@@ -49,7 +50,7 @@ def get_agency_id(lat, lon, radius=50, vehicle_type="truck"):
 
         # 🔍 Extract agencyID
         match = re.search(r'agencyID":"(.*?)"', text)
-        
+
         if match:
             return match.group(1)
         else:
@@ -59,6 +60,8 @@ def get_agency_id(lat, lon, radius=50, vehicle_type="truck"):
     except Exception as e:
         print("❌ Error:", str(e))
         return None
+
+
 headers = {
     "sec-ch-ua-platform": '"Linux"',
     "Referer": "https://www.ada.fr/",
@@ -99,7 +102,7 @@ params = {
     "language": "fr",
     "country": "FR",
 }
-loaction_codes=[]
+loaction_codes = []
 for location in pickup_locations:
     session = requests.Session()
     # Encode location for URL
@@ -122,17 +125,25 @@ for location in pickup_locations:
             first = data["features"][0]
             print("📍 Found:", first.get("place_name"))
             print("🌐 Coordinates:", first.get("center"))
-            code=get_agency_id(first.get("center")[1], first.get("center")[0])
-            current_location_data={"location": location, "code": code,"location_term": first.get("place_name")}
+            code = get_agency_id(first.get("center")[1], first.get("center")[0])
+            current_location_data = {
+                "location": location,
+                "code": code,
+                "location_term": first.get("place_name"),
+            }
             loaction_codes.append(current_location_data)
 
         else:
             print("❌ No results")
-            current_location_data={"location": location, "code": None,"location_term": None}
+            current_location_data = {
+                "location": location,
+                "code": None,
+                "location_term": None,
+            }
             loaction_codes.append(current_location_data)
     else:
         print("⚠️ Request failed:", response.status_code)
 
-df=pd.DataFrame(loaction_codes)
+df = pd.DataFrame(loaction_codes)
 print(df)
 df.to_csv("ada_locations.csv", index=False)

@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -55,7 +54,9 @@ class woodford:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -159,7 +160,11 @@ class woodford:
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             country = result["country"] or "ZA"
-            source_url = result["source_url"] or result["website_url"] or "https://www.woodford.co.za/"
+            source_url = (
+                result["source_url"]
+                or result["website_url"]
+                or "https://www.woodford.co.za/"
+            )
             headers = {
                 "User-Agent": (
                     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "

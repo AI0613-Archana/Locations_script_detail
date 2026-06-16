@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -55,7 +54,9 @@ class bluucarrental:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -166,8 +167,7 @@ class bluucarrental:
             source_name = result["source_name"]
             country = result["country"]
             source_url = (
-                result["source_url"]
-                or "https://bluuapi.bcr.co.za/Branches/profile"
+                result["source_url"] or "https://bluuapi.bcr.co.za/Branches/profile"
             )
             rows = []
             seen_location_codes = set()
@@ -292,25 +292,25 @@ if __name__ == "__main__":
     SC = None
     try:
         # SC = bluucarrental(0, 142, 142, "input_locations", "locations", False, "20")
-            (
-                script,
-                status,
-                startid,
-                endid,
-                inputtable,
-                outputtable,
-                offline,
-                proxyid,
-            ) = sys.argv
-            SC = bluucarrental(
-                status,
-                startid,
-                endid,
-                inputtable,
-                outputtable,
-                offline,
-                proxyid,
-            )
+        (
+            script,
+            status,
+            startid,
+            endid,
+            inputtable,
+            outputtable,
+            offline,
+            proxyid,
+        ) = sys.argv
+        SC = bluucarrental(
+            status,
+            startid,
+            endid,
+            inputtable,
+            outputtable,
+            offline,
+            proxyid,
+        )
     except Exception:
         if SC:
             SC.eHandling()

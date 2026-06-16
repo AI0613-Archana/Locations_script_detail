@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -167,7 +166,10 @@ class maggiore:
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             country = result["country"] or "IT"
-            source_url = result["source_url"] or "https://www.maggiore.it/ctrlServlet/_network.php"
+            source_url = (
+                result["source_url"]
+                or "https://www.maggiore.it/ctrlServlet/_network.php"
+            )
             rows = []
             seen_location_codes = set()
             headers = {
@@ -258,10 +260,14 @@ class maggiore:
                 continue
 
             filters = location.get("Filtro") or {}
-            is_airport = True if (
-                str(filters.get("aeroporti", "0")) == "1"
-                or str(location.get("int_aereo", "0")) == "1"
-            ) else False
+            is_airport = (
+                True
+                if (
+                    str(filters.get("aeroporti", "0")) == "1"
+                    or str(location.get("int_aereo", "0")) == "1"
+                )
+                else False
+            )
             is_railway_station = (
                 str(filters.get("stazioni", "0")) == "1"
                 or str(location.get("int_fs", "0")) == "1"

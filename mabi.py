@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -243,9 +242,7 @@ class mabi:
             if not isinstance(location, dict):
                 continue
 
-            location_code = re.sub(
-                r"\s+", " ", str(location.get("Code") or "")
-            ).strip()
+            location_code = re.sub(r"\s+", " ", str(location.get("Code") or "")).strip()
             location_name = re.sub(
                 r"\s+", " ", str(location.get("WebName") or "")
             ).strip()
@@ -258,9 +255,7 @@ class mabi:
 
             is_airport = True if bool(location.get("IsAirport")) else False
             city = re.sub(r"\s+", " ", str(location.get("City") or "")).strip()
-            region = re.sub(
-                r"\s+", " ", str(location.get("RegionName") or "")
-            ).strip()
+            region = re.sub(r"\s+", " ", str(location.get("RegionName") or "")).strip()
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             seen_location_codes.add(location_code)

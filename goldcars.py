@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -314,6 +313,7 @@ class goldcars:
             }
             rows.append(row)
 
+
 if __name__ == "__main__":
     SC = None
     try:
@@ -348,4 +348,3 @@ if __name__ == "__main__":
         if SC:
             SC.conn_close()
     time.sleep(3)
-

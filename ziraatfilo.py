@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -55,7 +54,9 @@ class ziraatfilo:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -233,12 +234,8 @@ class ziraatfilo:
             if not isinstance(location, dict):
                 continue
 
-            location_code = re.sub(
-                r"\s+", " ", str(location.get("id") or "")
-            ).strip()
-            location_name = re.sub(
-                r"\s+", " ", str(location.get("name") or "")
-            ).strip()
+            location_code = re.sub(r"\s+", " ", str(location.get("id") or "")).strip()
+            location_name = re.sub(r"\s+", " ", str(location.get("name") or "")).strip()
             if (
                 not location_code
                 or not location_name
@@ -306,4 +303,3 @@ if __name__ == "__main__":
         if SC:
             SC.conn_close()
     time.sleep(3)
-

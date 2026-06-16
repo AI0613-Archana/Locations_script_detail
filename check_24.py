@@ -101,7 +101,6 @@ class check24:
             timeout=30,
         )
 
-
     def insert(self, chunks):
 
         if not chunks:
@@ -155,7 +154,10 @@ class check24:
             websitecode = result["websitecode"]
             source_name = result.get("source_name", "check24")
             country = result.get("country", "") or result.get("location_country", "")
-            source_url = result.get("source_url") or "https://api-public.mietwagenvergleich.check24.de/journey/suggest/query"
+            source_url = (
+                result.get("source_url")
+                or "https://api-public.mietwagenvergleich.check24.de/journey/suggest/query"
+            )
             print("refid", refid, "source_url", source_url)
             try:
                 rows = []
@@ -170,14 +172,21 @@ class check24:
                 print("airport seed count", len(airport_codes), "for country", country)
                 with ThreadPoolExecutor(max_workers=THREAD_COUNT) as executor:
                     futures = {
-                        executor.submit(self.load, airport_code, source_url): airport_code
+                        executor.submit(
+                            self.load, airport_code, source_url
+                        ): airport_code
                         for airport_code in airport_codes
                     }
                     for future in as_completed(futures):
                         airport_code = futures[future]
                         try:
                             response = future.result()
-                            print("search_value", airport_code, "status", response.status_code)
+                            print(
+                                "search_value",
+                                airport_code,
+                                "status",
+                                response.status_code,
+                            )
                             if response.status_code != 200:
                                 continue
                             rows.extend(

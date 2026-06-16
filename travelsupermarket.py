@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 from tls_chameleon import TLSSession
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -193,6 +192,7 @@ class travelsupermarket:
             }
 
             try:
+
                 def fetch_iata(iata):
                     if "{iata}" in source_url:
                         url = source_url.format(iata=iata)
@@ -224,9 +224,7 @@ class travelsupermarket:
 
                 iata_codes = list(airportsdata.load("IATA").keys())
                 with ThreadPoolExecutor(max_workers=100) as executor:
-                    futures = [
-                        executor.submit(fetch_iata, iata) for iata in iata_codes
-                    ]
+                    futures = [executor.submit(fetch_iata, iata) for iata in iata_codes]
                     for future in as_completed(futures):
                         iata, status_code, response_text = future.result()
                         location_count = 0
@@ -276,17 +274,11 @@ class travelsupermarket:
                 continue
 
             name = re.sub(r"\s+", " ", str(location.get("name") or "")).strip()
-            location_code = re.sub(
-                r"\s+", " ", str(location.get("id") or "")
-            ).strip()
-            location_kind = re.sub(
-                r"\s+", " ", str(location.get("type") or "")
-            ).strip().lower()
-            if (
-                not name
-                or not location_code
-                or location_code in seen_location_codes
-            ):
+            location_code = re.sub(r"\s+", " ", str(location.get("id") or "")).strip()
+            location_kind = (
+                re.sub(r"\s+", " ", str(location.get("type") or "")).strip().lower()
+            )
+            if not name or not location_code or location_code in seen_location_codes:
                 continue
 
             is_airport = True if location_kind == "airport" else False
@@ -367,4 +359,3 @@ if __name__ == "__main__":
         if SC:
             SC.conn_close()
     time.sleep(3)
-

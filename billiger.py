@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 from tls_chameleon import TLSSession
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -55,7 +54,9 @@ class billiger:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -165,7 +166,10 @@ class billiger:
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             country = result["country"]
-            source_url = result["source_url"] or "https://consumer-api.floyt.com/geo/v2/autosuggest"
+            source_url = (
+                result["source_url"]
+                or "https://consumer-api.floyt.com/geo/v2/autosuggest"
+            )
             rows = []
             seen_location_codes = set()
             headers = {
@@ -229,7 +233,13 @@ class billiger:
                             exc,
                         )
                         response = self.load(source_url, headers, params, {})
-                        print("Query:", ch, "status:", response.status_code, "without proxy")
+                        print(
+                            "Query:",
+                            ch,
+                            "status:",
+                            response.status_code,
+                            "without proxy",
+                        )
 
                     if response.status_code == 200:
                         self.extraction(
@@ -275,7 +285,9 @@ class billiger:
             airport_code = re.sub(
                 r"\s+", " ", str(location.get("airport_code") or "")
             ).strip()
-            rail_code = re.sub(r"\s+", " ", str(location.get("rail_code") or "")).strip()
+            rail_code = re.sub(
+                r"\s+", " ", str(location.get("rail_code") or "")
+            ).strip()
             location_type_source = str(location.get("type") or "").lower()
             is_airport = True if "airport" in location_type_source else False
             if is_airport:

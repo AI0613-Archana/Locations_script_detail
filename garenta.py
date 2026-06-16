@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 from tls_chameleon import TLSSession
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -167,7 +166,9 @@ class garenta:
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             country = result["country"]
-            source_url = result["source_url"] or "https://apigw.garenta.com.tr/GetBranchesData"
+            source_url = (
+                result["source_url"] or "https://apigw.garenta.com.tr/GetBranchesData"
+            )
             rows = []
             seen_location_codes = set()
             headers = {
@@ -247,18 +248,14 @@ class garenta:
                 r"\s+", " ", str(location.get("referenceId") or "")
             ).strip()
             branch_id = re.sub(r"\s+", " ", str(location.get("id") or "")).strip()
-            location_code = "|".join(
-                part for part in (reference_id, branch_id) if part
-            )
+            location_code = "|".join(part for part in (reference_id, branch_id) if part)
             if not location_code or location_code in seen_location_codes:
                 continue
 
-            iata_code = re.sub(
-                r"\s+", " ", str(location.get("iataCode") or "")
-            ).strip().upper()
-            location_name = re.sub(
-                r"\s+", " ", str(location.get("name") or "")
-            ).strip()
+            iata_code = (
+                re.sub(r"\s+", " ", str(location.get("iataCode") or "")).strip().upper()
+            )
+            location_name = re.sub(r"\s+", " ", str(location.get("name") or "")).strip()
             pickup_location = iata_code or location_name
             if not pickup_location:
                 continue

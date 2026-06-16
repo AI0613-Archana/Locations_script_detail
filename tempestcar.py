@@ -92,7 +92,9 @@ def _salvage_truncated_tempest_payload(raw_text):
     for index, match in enumerate(matches):
         group_name = match.group(1)
         branch_start = match.end()
-        branch_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw_text)
+        branch_end = (
+            matches[index + 1].start() if index + 1 < len(matches) else len(raw_text)
+        )
         branch_text = raw_text[branch_start:branch_end]
         branches = _parse_branch_objects(branch_text)
 
@@ -105,7 +107,9 @@ def _salvage_truncated_tempest_payload(raw_text):
             )
 
     if not groups:
-        raise ValueError("Tempest API returned malformed JSON and no complete branches could be recovered.")
+        raise ValueError(
+            "Tempest API returned malformed JSON and no complete branches could be recovered."
+        )
 
     return groups
 

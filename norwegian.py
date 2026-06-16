@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 from tls_chameleon import TLSSession
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -169,7 +168,9 @@ class norwegian:
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             country = result["country"]
-            source_url = result["source_url"] or "https://www.norwegian.com/api/cartrawler"
+            source_url = (
+                result["source_url"] or "https://www.norwegian.com/api/cartrawler"
+            )
             rows = []
             seen_location_codes = set()
             headers = {
@@ -186,6 +187,7 @@ class norwegian:
             }
 
             try:
+
                 def fetch_iata(iata):
                     params = {
                         "culture": "en-US",
@@ -228,9 +230,7 @@ class norwegian:
 
                 iata_codes = list(airportsdata.load("IATA").keys())
                 with ThreadPoolExecutor(max_workers=100) as executor:
-                    futures = [
-                        executor.submit(fetch_iata, iata) for iata in iata_codes
-                    ]
+                    futures = [executor.submit(fetch_iata, iata) for iata in iata_codes]
                     for future in as_completed(futures):
                         iata, status_code, response_text = future.result()
                         location_count = 0
@@ -279,9 +279,7 @@ class norwegian:
             if not isinstance(location, dict):
                 continue
 
-            location_code = re.sub(
-                r"\s+", " ", str(location.get("code") or "")
-            ).strip()
+            location_code = re.sub(r"\s+", " ", str(location.get("code") or "")).strip()
             display_name = re.sub(
                 r"\s+", " ", str(location.get("displayName") or "")
             ).strip()
@@ -294,9 +292,11 @@ class norwegian:
 
             is_airport = True if bool(location.get("isAirport")) else False
             is_railway_station = bool(location.get("isRailwayStation"))
-            airport_name = re.sub(
-                r"\s+", " ", str(location.get("airportName") or "")
-            ).strip().upper()
+            airport_name = (
+                re.sub(r"\s+", " ", str(location.get("airportName") or ""))
+                .strip()
+                .upper()
+            )
 
             if is_airport:
                 pickup_location = airport_name or display_name
