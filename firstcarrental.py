@@ -302,27 +302,27 @@ if __name__ == "__main__":
 
     SC = None
     try:
-        SC = first_loc(0, 163, 163, "input_locations", "locations", False, "20")
+        # SC = first_loc(0, 163, 163, "input_locations", "locations", False, "20")
 
-        # (
-        #     script,
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # ) = sys.argv
-        # SC = first_loc(
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # )
+        (
+            script,
+            status,
+            startid,
+            endid,
+            inputtable,
+            outputtable,
+            offline,
+            proxyid,
+        ) = sys.argv
+        SC = first_loc(
+            status,
+            startid,
+            endid,
+            inputtable,
+            outputtable,
+            offline,
+            proxyid,
+        )
     except Exception:
         if SC:
             SC.eHandling()
