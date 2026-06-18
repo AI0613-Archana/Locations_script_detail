@@ -17,6 +17,9 @@ from psycopg2.extras import RealDictCursor, execute_values
 
 load_dotenv()
 
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 2
+
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "port": int(os.getenv("DB_PORT", 6438)),
@@ -73,6 +76,39 @@ class tuicars:
             headers=headers,
             proxies=proxies,
             impersonate="chrome",
+        )
+
+    def load_iata_with_retry(self, url, headers, iata):
+        last_response = None
+        last_error = None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = self.load(
+                    url,
+                    headers,
+                    {"search": iata},
+                    self.get_proxy(),
+                )
+                print(iata, response.status_code, "attempt", attempt)
+                if response.status_code == 200:
+                    return response
+
+                last_response = response
+                last_error = f"HTTP {response.status_code}"
+            except Exception as exc:
+                last_error = exc
+                print(iata, "attempt", attempt, "failed:", exc)
+
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS)
+
+        if last_response is not None:
+            print(iata, "retry exhausted:", last_error)
+            return last_response
+
+        raise RuntimeError(f"{iata} retry exhausted: {last_error}") from (
+            last_error if isinstance(last_error, Exception) else None
         )
 
     def insert(self, chunks):
@@ -212,11 +248,10 @@ class tuicars:
                     for iata in airports:
                         futures[
                             executor.submit(
-                                self.load,
+                                self.load_iata_with_retry,
                                 source_url,
                                 headers,
-                                {"search": iata},
-                                self.get_proxy(),
+                                iata,
                             )
                         ] = iata
 
@@ -224,13 +259,13 @@ class tuicars:
                         iata = futures[future]
                         try:
                             response = future.result()
-                            print(iata, response.status_code)
                         except Exception as exc:
                             print(iata, "failed:", exc)
                             failed_iatas.append(iata)
                             continue
 
                         if response.status_code != 200:
+                            print(iata, "failed after retries:", response.status_code)
                             failed_iatas.append(iata)
                             continue
 
