@@ -209,8 +209,8 @@ class thrifty_gr:
             if unique_key in seen_keys:
                 continue
             seen_keys.add(unique_key)
+            region =  airport_meta.get("subd", "")
 
-            created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             rows.append(
                 {
                     "id": refid,
@@ -220,10 +220,10 @@ class thrifty_gr:
                     "location_country": location_country,
                     "location_code": location_code,
                     "is_airport": is_airport,
-                    "created_date": created_date,
+                    "created_date": '',
                     "location_type": location_type,
                     "city": "",
-                    "region": airport_meta.get("subd", ""),
+                    "region":region,
                     "priority_level": "",
                     "location_term": label,
                     "location_name": label,
