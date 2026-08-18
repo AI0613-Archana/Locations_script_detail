@@ -14,7 +14,7 @@ except ImportError:
 import psycopg2
 from curl_cffi import requests
 from dotenv import load_dotenv
-from psycopg2.extras import RealDictCursor, execute_values
+from psycopg2.extras import RealDictCursor
 
 load_dotenv()
 
@@ -30,7 +30,7 @@ COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
     # "AT": ("expedia.at",     "AT"),
     # "AU": ("expedia.com.au", "AU"),
-    # "BR": ("expedia.com.br", "BR"),
+    "BR": ("expedia.com.br", "BR"),
     # "CA": ("expedia.ca",     "CA"),
     # "CH": ("expedia.ch",     "CH"),
     # "DE": ("expedia.de",     "DE"),
@@ -55,7 +55,7 @@ COUNTRY_CONFIG = {
 LOCALE_MAP = {
     # "AT": "de-AT,de;q=0.9",
     # "AU": "en-AU,en;q=0.9",
-    # "BR": "pt-BR,pt;q=0.9",
+    "BR": "pt-BR,pt;q=0.9",
     # "CA": "en-CA,en;q=0.9",
     # "CH": "de-CH,de;q=0.9",
     # "DE": "de-DE,de;q=0.9",
@@ -153,11 +153,14 @@ class expedia:
         self.cache_lock  = threading.Lock()
         self.seen_lock   = threading.Lock()
         self.rows_lock   = threading.Lock()
+        self.db_lock     = threading.Lock()
 
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
         )
         self.proxyset = self.cursor.fetchall()
+
+        self.length_limits = self._get_length_limits(self.cursor)
 
         self.cursor.execute(
             f"""
@@ -219,56 +222,59 @@ class expedia:
         )
 
     # -- DB ---------------------------------------------------------------------
-    def insert(self, chunks):
-        if not chunks:
-            print("No rows supplied for insert.")
-            return
+    def _get_length_limits(self, cursor):
+        cursor.execute(
+            """
+            SELECT column_name, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name = %s
+              AND character_maximum_length IS NOT NULL
+            """,
+            (self.outputtable.split(".")[-1],),
+        )
+        return {
+            row["column_name"]: row["character_maximum_length"]
+            for row in cursor.fetchall()
+        }
 
-        print("INSERT INITIATED")
-        columns = [c for c in chunks[0].keys() if c != "id"]
-        colnames = ",".join(columns)
-        sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES %s"
-        try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(
-                    """
-                    SELECT column_name, character_maximum_length
-                    FROM information_schema.columns
-                    WHERE table_name = %s
-                      AND character_maximum_length IS NOT NULL
-                    """,
-                    (self.outputtable.split(".")[-1],),
+    def insert_one(self, row):
+        """Insert a single row into outputtable immediately (thread-safe)."""
+        columns      = [c for c in row.keys() if c != "id"]
+        colnames     = ",".join(columns)
+        placeholders = ",".join(["%s"] * len(columns))
+        sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
+
+        value_row = []
+        for col in columns:
+            value   = row.get(col)
+            max_len = self.length_limits.get(col)
+            if isinstance(value, str) and max_len and len(value) > max_len:
+                print(
+                    "Truncated", col,
+                    "from", len(value), "to", max_len,
+                    "for location_code", row.get("location_code"),
                 )
-                length_limits = {
-                    row["column_name"]: row["character_maximum_length"]
-                    for row in cursor.fetchall()
-                }
+                value = value[:max_len]
+            value_row.append(value)
 
-                values = []
-                for row in chunks:
-                    value_row = []
-                    for col in columns:
-                        value     = row.get(col)
-                        max_len   = length_limits.get(col)
-                        if isinstance(value, str) and max_len and len(value) > max_len:
-                            print(
-                                "Truncated", col,
-                                "from", len(value), "to", max_len,
-                                "for location_code", row.get("location_code"),
-                            )
-                            value = value[:max_len]
-                        value_row.append(value)
-                    values.append(tuple(value_row))
-
-                execute_values(cursor, sql, values, page_size=500)
-            self.conn.commit()
-        except Exception:
+        with self.db_lock:
             try:
-                self.conn.rollback()
+                self.cursor.execute(sql, tuple(value_row))
+                self.conn.commit()
+                print(
+                    "INSERTED |", "pickup:", row.get("pickup_location"),
+                    "| type:", row.get("location_type"),
+                    "| code:", row.get("location_code"),
+                )
+                return True
             except Exception:
-                pass
-            raise
-        print("INSERTED")
+                try:
+                    self.conn.rollback()
+                except Exception:
+                    pass
+                print("INSERT FAILED for location_code", row.get("location_code"))
+                self.eHandling()
+                return False
 
     def update(self, upstatus, refid):
         updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
@@ -415,8 +421,11 @@ class expedia:
                 if row["location_code"] in seen_location_codes:
                     continue
                 seen_location_codes.add(row["location_code"])
-            with self.rows_lock:
-                rows.append(row)
+
+            inserted = self.insert_one(row)
+            if inserted:
+                with self.rows_lock:
+                    rows.append(row)
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
@@ -444,7 +453,6 @@ class expedia:
                             self.eHandling()
 
                     if rows:
-                        self.insert(rows)
                         self.update(1, refid)
                     else:
                         continue
@@ -459,7 +467,7 @@ class expedia:
 if __name__ == "__main__":
     SC = None
     try:
-        SC = expedia(1, 207, 207, "input_locations", "locations", False, "59", max_workers=3)
+        SC = expedia(0,199, 199, "input_locations", "locations", False, "59", max_workers=2)
     except Exception:
         raise
         if SC:
