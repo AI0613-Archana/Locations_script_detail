@@ -7,6 +7,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import airportsdata
+try:
+    import geonamescache
+except ImportError:
+    geonamescache = None
 import psycopg2
 from curl_cffi import requests
 from dotenv import load_dotenv
@@ -39,7 +43,7 @@ COUNTRY_CONFIG = {
     # "IT": ("expedia.it",     "IT"),
     # "JP": ("expedia.co.jp",  "JP"),
     # "MX": ("expedia.mx",     "MX"),
-    "NL": ("expedia.nl",     "NL"),
+    # "NL": ("expedia.nl",     "NL"),
     # "NO": ("expedia.no",     "NO"),
     # "NZ": ("expedia.co.nz",  "NZ"),
     # "SE": ("expedia.se",     "SE"),
@@ -64,7 +68,7 @@ LOCALE_MAP = {
     # "IT": "it-IT,it;q=0.9",
     # "JP": "ja-JP,ja;q=0.9",
     # "MX": "es-MX,es;q=0.9",
-    "NL": "nl-NL,nl;q=0.9",
+    # "NL": "nl-NL,nl;q=0.9",
     # "NO": "nb-NO,nb;q=0.9",
     # "NZ": "en-NZ,en;q=0.9",
     # "SE": "sv-SE,sv;q=0.9",
@@ -72,6 +76,42 @@ LOCALE_MAP = {
     # "TH": "th-TH,th;q=0.9",
     # "US": "en-US,en;q=0.9",
 }
+
+_GC = geonamescache.GeonamesCache() if geonamescache else None
+_COUNTRIES = _GC.get_countries() if _GC else {}
+_CITY_INDEX = {}
+
+if _GC:
+    for city in _GC.get_cities().values():
+        key = (city.get("name", "").strip().lower(), city.get("countrycode", "").strip().upper())
+        if not key[0] or not key[1]:
+            continue
+        current = _CITY_INDEX.get(key)
+        if current is None or int(city.get("population") or 0) > int(current.get("population") or 0):
+            _CITY_INDEX[key] = city
+
+
+def resolve_city_location(city_name, country_code):
+    city_name = (city_name or "").strip()
+    country_code = (country_code or "").strip().upper()
+    if not city_name:
+        return ""
+
+    if _GC:
+        match = _CITY_INDEX.get((city_name.lower(), country_code))
+        if match is None:
+            for (name, _country), city in _CITY_INDEX.items():
+                if name == city_name.lower():
+                    match = city
+                    break
+
+        if match:
+            country_name = _COUNTRIES.get(match.get("countrycode", ""), {}).get("name", "")
+            if country_name:
+                return f"{match.get('name', city_name)}, {country_name}"
+            return match.get("name", city_name)
+
+    return city_name
 
 
 def build_input_data():
@@ -106,7 +146,7 @@ class expedia:
         self.proxyid     = proxyid
         self.conn        = psycopg2.connect(**DB_CONFIG)
         self.cursor      = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 24
+        self.websitecode = 1
         self.max_workers = max_workers
 
         self.api_cache   = {}           # (term, bookingcountry) -> raw API response
@@ -291,11 +331,33 @@ class expedia:
         return data
 
     # -- EXTRACTION ----------------------------------------------------------
+    def _build_row(self, refid, websitecode, source_name, ss, bookingcountry,
+                    locationcode, is_airport, loctype, city_location, region,
+                    term, location_name, created_date):
+        return {
+            "id":               refid,
+            "source_name":      source_name,
+            "website_code":     websitecode,
+            "pickup_location":  ss,
+            "location_country": bookingcountry,
+            "location_code":    locationcode,
+            "is_airport":       is_airport,
+            "created_date":     created_date,
+            "location_type":    loctype,
+            "city":             city_location,
+            "region":           region,
+            "priority_level":   "",
+            "location_term":    term,
+            "location_name":    location_name,
+        }
+
     def extraction(self, item, refid, websitecode, source_name, rows, seen_location_codes):
         ss             = item["ss"]
         domain         = item["domain"]
         bookingcountry = item["bookingcountry"]
         city           = item["city"]
+        airport_name   = item["airport_name"]
+        city_location  = resolve_city_location(city, bookingcountry)
         proxies        = self.get_proxy()
         url            = f"https://{domain}/api/v4/typeahead/{ss}"
 
@@ -305,44 +367,56 @@ class expedia:
             location_list = self.fetch_location_list(city, bookingcountry, proxies, url)
 
         created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+        airport_row = None
+        city_row = None
+
         for i in location_list.get("sr", []):
             loctype      = i.get("type")
             region_names = i.get("regionNames") or {}
             term         = region_names.get("fullName", "")
             region       = region_names.get("shortName", "")
-            print('loctype', loctype)
-            # if loctype == 'AIRPORT':
-                # Match only results that contain the IATA code in parentheses
-            if f"({ss}-" in term or f"({ss})" in term:
-                ess_id       = i.get("essId") or {}
-                locationcode = str(ess_id.get("sourceId", ""))
-                if not locationcode:
+            ess_id       = i.get("essId") or {}
+            locationcode = str(ess_id.get("sourceId", ""))
+
+            if not locationcode:
+                continue
+
+            # --- Airport match: term contains the IATA code, e.g. "Schiphol (AMS-...)" ---
+            if airport_row is None and (f"({ss}-" in term or f"({ss})" in term):
+                airport_row = self._build_row(
+                    refid, websitecode, source_name, ss, bookingcountry,
+                    locationcode, True, loctype, city_location, region,
+                    term, airport_name or term, created_date,
+                )
+                continue
+
+            # --- City match: type is CITY and the city name shows up in the term ---
+            if (
+                city_row is None
+                and loctype == "CITY"
+                and city
+                and city.lower() in term.lower()
+            ):
+                city_row = self._build_row(
+                    refid, websitecode, source_name, ss, bookingcountry,
+                    locationcode, False, loctype, city_location, region,
+                    term, term, created_date,
+                )
+                continue
+
+            if airport_row and city_row:
+                break
+
+        for row in (airport_row, city_row):
+            if row is None:
+                continue
+            with self.seen_lock:
+                if row["location_code"] in seen_location_codes:
                     continue
-
-                with self.seen_lock:
-                    if locationcode in seen_location_codes:
-                        return
-                    seen_location_codes.add(locationcode)
-
-                row = {
-                    "id":               refid,
-                    "source_name":      source_name,
-                    "website_code":     websitecode,
-                    "pickup_location":  ss,
-                    "location_country": bookingcountry,
-                    "location_code":    locationcode,
-                    "is_airport":       True,
-                    "created_date":     created_date,
-                    "location_type":    loctype,
-                    "city":             city,
-                    "region":           region,
-                    "priority_level":   "",
-                    "location_term":    term,
-                    "location_name":    term,
-                }
-                with self.rows_lock:
-                    rows.append(row)
-                return
+                seen_location_codes.add(row["location_code"])
+            with self.rows_lock:
+                rows.append(row)
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
@@ -385,27 +459,7 @@ class expedia:
 if __name__ == "__main__":
     SC = None
     try:
-        SC = expedia(1, 196, 196, "input_locations", "locations", False, "59", max_workers=5)
-
-        # (
-        #     script,
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # ) = sys.argv
-        # SC = expedia(
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # )
+        SC = expedia(1, 207, 207, "input_locations", "locations", False, "59", max_workers=3)
     except Exception:
         raise
         if SC:
