@@ -24,53 +24,53 @@ DB_CONFIG = {
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    "AT": ("expedia.at",     "AT"),
-    "AU": ("expedia.com.au", "AU"),
-    "BR": ("expedia.com.br", "BR"),
-    "CA": ("expedia.ca",     "CA"),
-    "CH": ("expedia.ch",     "CH"),
-    "DE": ("expedia.de",     "DE"),
-    "DK": ("expedia.dk",     "DK"),
-    "ES": ("expedia.es",     "ES"),
-    "FI": ("expedia.fi",     "FI"),
-    "FR": ("expedia.fr",     "FR"),
-    "GB": ("expedia.co.uk",  "GB"),
-    "IE": ("expedia.ie",     "IE"),
-    "IT": ("expedia.it",     "IT"),
-    "JP": ("expedia.co.jp",  "JP"),
-    "MX": ("expedia.mx",     "MX"),
+    # "AT": ("expedia.at",     "AT"),
+    # "AU": ("expedia.com.au", "AU"),
+    # "BR": ("expedia.com.br", "BR"),
+    # "CA": ("expedia.ca",     "CA"),
+    # "CH": ("expedia.ch",     "CH"),
+    # "DE": ("expedia.de",     "DE"),
+    # "DK": ("expedia.dk",     "DK"),
+    # "ES": ("expedia.es",     "ES"),
+    # "FI": ("expedia.fi",     "FI"),
+    # "FR": ("expedia.fr",     "FR"),
+    # "GB": ("expedia.co.uk",  "GB"),
+    # "IE": ("expedia.ie",     "IE"),
+    # "IT": ("expedia.it",     "IT"),
+    # "JP": ("expedia.co.jp",  "JP"),
+    # "MX": ("expedia.mx",     "MX"),
     "NL": ("expedia.nl",     "NL"),
-    "NO": ("expedia.no",     "NO"),
-    "NZ": ("expedia.co.nz",  "NZ"),
-    "SE": ("expedia.se",     "SE"),
-    "SG": ("expedia.com.sg", "SG"),
-    "TH": ("expedia.co.th",  "TH"),
-    "US": ("expedia.com",    "US"),
+    # "NO": ("expedia.no",     "NO"),
+    # "NZ": ("expedia.co.nz",  "NZ"),
+    # "SE": ("expedia.se",     "SE"),
+    # "SG": ("expedia.com.sg", "SG"),
+    # "TH": ("expedia.co.th",  "TH"),
+    # "US": ("expedia.com",    "US"),
 }
 
 LOCALE_MAP = {
-    "AT": "de-AT,de;q=0.9",
-    "AU": "en-AU,en;q=0.9",
-    "BR": "pt-BR,pt;q=0.9",
-    "CA": "en-CA,en;q=0.9",
-    "CH": "de-CH,de;q=0.9",
-    "DE": "de-DE,de;q=0.9",
-    "DK": "da-DK,da;q=0.9",
-    "ES": "es-ES,es;q=0.9",
-    "FI": "fi-FI,fi;q=0.9",
-    "FR": "fr-FR,fr;q=0.9",
-    "GB": "en-GB,en;q=0.9",
-    "IE": "en-IE,en;q=0.9",
-    "IT": "it-IT,it;q=0.9",
-    "JP": "ja-JP,ja;q=0.9",
-    "MX": "es-MX,es;q=0.9",
+    # "AT": "de-AT,de;q=0.9",
+    # "AU": "en-AU,en;q=0.9",
+    # "BR": "pt-BR,pt;q=0.9",
+    # "CA": "en-CA,en;q=0.9",
+    # "CH": "de-CH,de;q=0.9",
+    # "DE": "de-DE,de;q=0.9",
+    # "DK": "da-DK,da;q=0.9",
+    # "ES": "es-ES,es;q=0.9",
+    # "FI": "fi-FI,fi;q=0.9",
+    # "FR": "fr-FR,fr;q=0.9",
+    # "GB": "en-GB,en;q=0.9",
+    # "IE": "en-IE,en;q=0.9",
+    # "IT": "it-IT,it;q=0.9",
+    # "JP": "ja-JP,ja;q=0.9",
+    # "MX": "es-MX,es;q=0.9",
     "NL": "nl-NL,nl;q=0.9",
-    "NO": "nb-NO,nb;q=0.9",
-    "NZ": "en-NZ,en;q=0.9",
-    "SE": "sv-SE,sv;q=0.9",
-    "SG": "en-SG,en;q=0.9",
-    "TH": "th-TH,th;q=0.9",
-    "US": "en-US,en;q=0.9",
+    # "NO": "nb-NO,nb;q=0.9",
+    # "NZ": "en-NZ,en;q=0.9",
+    # "SE": "sv-SE,sv;q=0.9",
+    # "SG": "en-SG,en;q=0.9",
+    # "TH": "th-TH,th;q=0.9",
+    # "US": "en-US,en;q=0.9",
 }
 
 
@@ -106,7 +106,7 @@ class expedia:
         self.proxyid     = proxyid
         self.conn        = psycopg2.connect(**DB_CONFIG)
         self.cursor      = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 1          # TODO: set Expedia's actual websitecode
+        self.websitecode = 24
         self.max_workers = max_workers
 
         self.api_cache   = {}           # (term, bookingcountry) -> raw API response
@@ -166,7 +166,7 @@ class expedia:
             "sec-fetch-dest":     "empty",
             "sec-fetch-mode":     "cors",
             "sec-fetch-site":     "same-origin",
-            "user-agent":         self.RandUA(chrome_major),
+            "user-agent":         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
         }
 
     def load(self, term, bookingcountry, proxies, url):
@@ -270,11 +270,9 @@ class expedia:
 
     def fetch_location_list(self, term, bookingcountry, proxies, url):
         ck = (term, bookingcountry)
-
         with self.cache_lock:
             if ck in self.api_cache:
                 return self.api_cache[ck]
-
         try:
             resp = self.load(term, bookingcountry, proxies, url)
             print("Status:", resp.status_code, "| term:", term, "| country:", bookingcountry)
@@ -298,7 +296,6 @@ class expedia:
         domain         = item["domain"]
         bookingcountry = item["bookingcountry"]
         city           = item["city"]
-
         proxies        = self.get_proxy()
         url            = f"https://{domain}/api/v4/typeahead/{ss}"
 
@@ -313,8 +310,9 @@ class expedia:
             region_names = i.get("regionNames") or {}
             term         = region_names.get("fullName", "")
             region       = region_names.get("shortName", "")
-
-            # Match only results that contain the IATA code in parentheses
+            print('loctype', loctype)
+            # if loctype == 'AIRPORT':
+                # Match only results that contain the IATA code in parentheses
             if f"({ss}-" in term or f"({ss})" in term:
                 ess_id       = i.get("essId") or {}
                 locationcode = str(ess_id.get("sourceId", ""))
@@ -339,7 +337,7 @@ class expedia:
                     "city":             city,
                     "region":           region,
                     "priority_level":   "",
-                    "location_term":    bookingcountry,
+                    "location_term":    term,
                     "location_name":    term,
                 }
                 with self.rows_lock:
@@ -387,7 +385,7 @@ class expedia:
 if __name__ == "__main__":
     SC = None
     try:
-        SC = expedia(2, 196, 196, "input_locations", "locations", False, "20", max_workers=10)
+        SC = expedia(1, 196, 196, "input_locations", "locations", False, "59", max_workers=5)
 
         # (
         #     script,
@@ -409,6 +407,7 @@ if __name__ == "__main__":
         #     proxyid,
         # )
     except Exception:
+        raise
         if SC:
             SC.eHandling()
         else:
