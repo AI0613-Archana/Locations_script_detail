@@ -32,7 +32,6 @@ COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
     # "ES": ("expedia.es",     "ES"),
     # "IT": ("expedia.it",     "IT"),
-    # "AF": ("expedia.af",     "AF"),
     # "SG": ("expedia.com.sg", "SG"),
     # "US": ("expedia.com",    "US"),
     # "JP": ("expedia.co.jp",  "JP"),
@@ -59,7 +58,6 @@ COUNTRY_CONFIG = {
 LOCALE_MAP = {
     # "ES": "es-ES,es;q=0.9",
     # "IT": "it-IT,it;q=0.9",
-    # "AF": "en-AF,en;q=0.9",
     # "SG": "en-SG,en;q=0.9",
     # "US": "en-US,en;q=0.9",
     # "JP": "ja-JP,ja;q=0.9",
