@@ -7,6 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import airportsdata
+
 try:
     import geonamescache
 except ImportError:
@@ -26,56 +27,59 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
+
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    # "AT": ("expedia.at",     "AT"),
-    # "AU": ("expedia.com.au", "AU"),
+    "ES": ("expedia.es", "ES"),
+    "IT": ("expedia.it", "IT"),
+    "SG": ("expedia.com.sg", "SG"),
+    "US": ("expedia.com", "US"),
+    "JP": ("expedia.co.jp", "JP"),
+    "NZ": ("expedia.co.nz", "NZ"),
+    "SE": ("expedia.se", "SE"),
+    "MX": ("expedia.mx", "MX"),
+    "FI": ("expedia.fi", "FI"),
+    "FR": ("expedia.fr", "FR"),
+    "AU": ("expedia.com.au", "AU"),
+    "IE": ("expedia.ie", "IE"),
+    "NO": ("expedia.no", "NO"),
+    "TH": ("expedia.co.th", "TH"),
+    "NL": ("expedia.nl", "NL"),
+    "AT": ("expedia.at", "AT"),
+    "GB": ("expedia.co.uk", "GB"),
     "BR": ("expedia.com.br", "BR"),
-    # "CA": ("expedia.ca",     "CA"),
-    # "CH": ("expedia.ch",     "CH"),
-    # "DE": ("expedia.de",     "DE"),
-    # "DK": ("expedia.dk",     "DK"),
-    # "ES": ("expedia.es",     "ES"),
-    # "FI": ("expedia.fi",     "FI"),
-    # "FR": ("expedia.fr",     "FR"),
-    # "GB": ("expedia.co.uk",  "GB"),
-    # "IE": ("expedia.ie",     "IE"),
-    # "IT": ("expedia.it",     "IT"),
-    # "JP": ("expedia.co.jp",  "JP"),
-    # "MX": ("expedia.mx",     "MX"),
-    # "NL": ("expedia.nl",     "NL"),
-    # "NO": ("expedia.no",     "NO"),
-    # "NZ": ("expedia.co.nz",  "NZ"),
-    # "SE": ("expedia.se",     "SE"),
-    # "SG": ("expedia.com.sg", "SG"),
-    # "TH": ("expedia.co.th",  "TH"),
-    # "US": ("expedia.com",    "US"),
+    "CH": ("expedia.ch", "CH"),
+    "CA": ("expedia.ca", "CA"),
+    "DE": ("expedia.de", "DE"),
+    "DK": ("expedia.dk", "DK"),
 }
 
+
 LOCALE_MAP = {
-    # "AT": "de-AT,de;q=0.9",
-    # "AU": "en-AU,en;q=0.9",
+    "ES": "es-ES,es;q=0.9",
+    "IT": "it-IT,it;q=0.9",
+    "SG": "en-SG,en;q=0.9",
+    "US": "en-US,en;q=0.9",
+    "JP": "ja-JP,ja;q=0.9",
+    "NZ": "en-NZ,en;q=0.9",
+    "SE": "sv-SE,sv;q=0.9",
+    "MX": "es-MX,es;q=0.9",
+    "FI": "fi-FI,fi;q=0.9",
+    "FR": "fr-FR,fr;q=0.9",
+    "AU": "en-AU,en;q=0.9",
+    "IE": "en-IE,en;q=0.9",
+    "NO": "nb-NO,nb;q=0.9",
+    "TH": "th-TH,th;q=0.9",
+    "NL": "nl-NL,nl;q=0.9",
+    "AT": "de-AT,de;q=0.9",
+    "GB": "en-GB,en;q=0.9",
     "BR": "pt-BR,pt;q=0.9",
-    # "CA": "en-CA,en;q=0.9",
-    # "CH": "de-CH,de;q=0.9",
-    # "DE": "de-DE,de;q=0.9",
-    # "DK": "da-DK,da;q=0.9",
-    # "ES": "es-ES,es;q=0.9",
-    # "FI": "fi-FI,fi;q=0.9",
-    # "FR": "fr-FR,fr;q=0.9",
-    # "GB": "en-GB,en;q=0.9",
-    # "IE": "en-IE,en;q=0.9",
-    # "IT": "it-IT,it;q=0.9",
-    # "JP": "ja-JP,ja;q=0.9",
-    # "MX": "es-MX,es;q=0.9",
-    # "NL": "nl-NL,nl;q=0.9",
-    # "NO": "nb-NO,nb;q=0.9",
-    # "NZ": "en-NZ,en;q=0.9",
-    # "SE": "sv-SE,sv;q=0.9",
-    # "SG": "en-SG,en;q=0.9",
-    # "TH": "th-TH,th;q=0.9",
-    # "US": "en-US,en;q=0.9",
+    "CH": "de-CH,de;q=0.9",
+    "CA": "en-CA,en;q=0.9",
+    "DE": "de-DE,de;q=0.9",
+    "DK": "da-DK,da;q=0.9",
 }
+
 
 _GC = geonamescache.GeonamesCache() if geonamescache else None
 _COUNTRIES = _GC.get_countries() if _GC else {}
@@ -83,11 +87,16 @@ _CITY_INDEX = {}
 
 if _GC:
     for city in _GC.get_cities().values():
-        key = (city.get("name", "").strip().lower(), city.get("countrycode", "").strip().upper())
+        key = (
+            city.get("name", "").strip().lower(),
+            city.get("countrycode", "").strip().upper(),
+        )
         if not key[0] or not key[1]:
             continue
         current = _CITY_INDEX.get(key)
-        if current is None or int(city.get("population") or 0) > int(current.get("population") or 0):
+        if current is None or int(city.get("population") or 0) > int(
+            current.get("population") or 0
+        ):
             _CITY_INDEX[key] = city
 
 
@@ -106,7 +115,9 @@ def resolve_city_location(city_name, country_code):
                     break
 
         if match:
-            country_name = _COUNTRIES.get(match.get("countrycode", ""), {}).get("name", "")
+            country_name = _COUNTRIES.get(match.get("countrycode", ""), {}).get(
+                "name", ""
+            )
             if country_name:
                 return f"{match.get('name', city_name)}, {country_name}"
             return match.get("name", city_name)
@@ -114,46 +125,72 @@ def resolve_city_location(city_name, country_code):
     return city_name
 
 
-def build_input_data():
+def build_input_data(target_terms=None):
     """Build (ss, domain, bookingcountry, city, airport_name) rows from airportsdata."""
     airports_db = airportsdata.load("IATA")
+    target_terms = {
+        term.strip().upper() for term in (target_terms or []) if term.strip()
+    }
+
     rows = []
+
     for iata, v in sorted(airports_db.items()):
-        country = v["country"]
-        if country not in COUNTRY_CONFIG:
+        if target_terms and iata.upper() not in target_terms:
             continue
-        domain, bookingcountry = COUNTRY_CONFIG[country]
-        rows.append({
-            "ss":             iata,
-            "domain":         domain,
-            "bookingcountry": bookingcountry,
-            "city":           v["city"],
-            "airport_name":   v["name"],
-        })
+
+        # Start processing from IATA codes beginning with I
+        # if iata < "J":
+        #     print("skipping")
+        #     continue
+        # For every airport, create a row for every Expedia domain
+        for country, (domain, bookingcountry) in COUNTRY_CONFIG.items():
+
+            rows.append(
+                {
+                    "ss": iata,
+                    "domain": domain,
+                    "bookingcountry": bookingcountry,
+                    "city": v["city"],
+                    "airport_name": v["name"],
+                }
+            )
+
     rows.sort(key=lambda r: (r["bookingcountry"], r["ss"]))
+
     return rows
 
 
 class expedia:
     def __init__(
-        self, status, startid, endid, inputtable, outputtable, offline, proxyid,
+        self,
+        status,
+        startid,
+        endid,
+        inputtable,
+        outputtable,
+        offline,
+        proxyid,
         max_workers=10,
+        target_terms=None,
     ):
-        self.inputtable  = inputtable
+        self.inputtable = inputtable
         self.outputtable = outputtable
-        self.startid     = startid
-        self.endid       = endid
-        self.proxyid     = proxyid
-        self.conn        = psycopg2.connect(**DB_CONFIG)
-        self.cursor      = self.conn.cursor(cursor_factory=RealDictCursor)
+        self.startid = startid
+        self.endid = endid
+        self.proxyid = proxyid
+        self.conn = psycopg2.connect(**DB_CONFIG)
+        self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
         self.websitecode = 1
         self.max_workers = max_workers
+        self.target_terms = target_terms or []
 
-        self.api_cache   = {}           # (term, bookingcountry) -> raw API response
-        self.cache_lock  = threading.Lock()
-        self.seen_lock   = threading.Lock()
-        self.rows_lock   = threading.Lock()
-        self.db_lock     = threading.Lock()
+        self.api_cache = {}  # (term, bookingcountry) -> raw API response
+        self.cache_lock = threading.Lock()
+        self.failed_requests = []
+        self.failure_lock = threading.Lock()
+        self.seen_lock = threading.Lock()
+        self.rows_lock = threading.Lock()
+        self.db_lock = threading.Lock()
 
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
@@ -162,13 +199,22 @@ class expedia:
 
         self.length_limits = self._get_length_limits(self.cursor)
 
-        self.cursor.execute(
-            f"""
-            SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
-            """,
-            (str(self.websitecode), status, startid, endid),
-        )
+        if str(status).strip().lower() == "any":
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s::text AND id BETWEEN %s AND %s
+                """,
+                (str(self.websitecode), startid, endid),
+            )
+        else:
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+                """,
+                (str(self.websitecode), status, startid, endid),
+            )
         resultset = self.cursor.fetchall()
         self.main(resultset)
 
@@ -186,7 +232,9 @@ class expedia:
 
     def RandUA(self, chrome_major):
         """Desktop Linux Chrome UA, matching the sec-ch-ua / platform headers below."""
-        chrome_build = f"{chrome_major}.0.{random.randint(6000, 7300)}.{random.randint(0, 200)}"
+        chrome_build = (
+            f"{chrome_major}.0.{random.randint(6000, 7300)}.{random.randint(0, 200)}"
+        )
         return (
             f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
             f"Chrome/{chrome_build} Safari/537.36"
@@ -194,22 +242,22 @@ class expedia:
 
     # -- HTTP -----------------------------------------------------------------
     def make_headers(self, bookingcountry):
-        domain  = COUNTRY_CONFIG[bookingcountry][0]
-        locale  = LOCALE_MAP.get(bookingcountry, "en-US,en;q=0.9")
+        domain = COUNTRY_CONFIG[bookingcountry][0]
+        locale = LOCALE_MAP.get(bookingcountry, "en-US,en;q=0.9")
         referer = f"https://www.{domain}/"
         chrome_major = random.randint(120, 141)
         return {
-            "accept":             "application/json, text/plain, */*",
-            "accept-language":    locale,
-            "origin":             f"https://www.{domain}",
-            "referer":            referer,
-            "sec-ch-ua":          f'"Chromium";v="{chrome_major}", "Not=A?Brand";v="24", "Google Chrome";v="{chrome_major}"',
-            "sec-ch-ua-mobile":   "?0",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": locale,
+            "origin": f"https://www.{domain}",
+            "referer": referer,
+            "sec-ch-ua": f'"Chromium";v="{chrome_major}", "Not=A?Brand";v="24", "Google Chrome";v="{chrome_major}"',
+            "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Linux"',
-            "sec-fetch-dest":     "empty",
-            "sec-fetch-mode":     "cors",
-            "sec-fetch-site":     "same-origin",
-            "user-agent":         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
         }
 
     def load(self, term, bookingcountry, proxies, url):
@@ -239,20 +287,25 @@ class expedia:
 
     def insert_one(self, row):
         """Insert a single row into outputtable immediately (thread-safe)."""
-        columns      = [c for c in row.keys() if c != "id"]
-        colnames     = ",".join(columns)
+        columns = [c for c in row.keys() if c != "id"]
+        colnames = ",".join(columns)
         placeholders = ",".join(["%s"] * len(columns))
         sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
 
         value_row = []
         for col in columns:
-            value   = row.get(col)
+            value = row.get(col)
             max_len = self.length_limits.get(col)
             if isinstance(value, str) and max_len and len(value) > max_len:
                 print(
-                    "Truncated", col,
-                    "from", len(value), "to", max_len,
-                    "for location_code", row.get("location_code"),
+                    "Truncated",
+                    col,
+                    "from",
+                    len(value),
+                    "to",
+                    max_len,
+                    "for location_code",
+                    row.get("location_code"),
                 )
                 value = value[:max_len]
             value_row.append(value)
@@ -262,9 +315,13 @@ class expedia:
                 self.cursor.execute(sql, tuple(value_row))
                 self.conn.commit()
                 print(
-                    "INSERTED |", "pickup:", row.get("pickup_location"),
-                    "| type:", row.get("location_type"),
-                    "| code:", row.get("location_code"),
+                    "INSERTED |",
+                    "pickup:",
+                    row.get("pickup_location"),
+                    "| type:",
+                    row.get("location_type"),
+                    "| code:",
+                    row.get("location_code"),
                 )
                 return True
             except Exception:
@@ -290,6 +347,7 @@ class expedia:
 
     def eHandling(self):
         import traceback
+
         traceback.print_exc()
 
     def _execute_commit(self, query, params=None):
@@ -319,108 +377,134 @@ class expedia:
         with self.cache_lock:
             if ck in self.api_cache:
                 return self.api_cache[ck]
-        try:
-            resp = self.load(term, bookingcountry, proxies, url)
-            print("Status:", resp.status_code, "| term:", term, "| country:", bookingcountry)
-        except Exception as exc:
-            print("Proxy failed:", proxies.get("https", ""), "error:", exc)
-            resp = self.load(term, bookingcountry, {}, url)
-            print("Status:", resp.status_code, "(no proxy)")
+        errors = []
+        attempts = (proxies, {})
 
-        resp.raise_for_status()
-        data = resp.json()
+        for attempt, current_proxies in enumerate(attempts, start=1):
+            try:
+                resp = self.load(term, bookingcountry, current_proxies, url)
+                print(
+                    "Status:",
+                    resp.status_code,
+                    "| term:",
+                    term,
+                    "| country:",
+                    bookingcountry,
+                    "| attempt:",
+                    attempt,
+                )
+                resp.raise_for_status()
+                data = resp.json()
 
-        with self.cache_lock:
-            self.api_cache[ck] = data
+                with self.cache_lock:
+                    self.api_cache[ck] = data
 
-        time.sleep(0.3)
-        return data
+                time.sleep(0.3)
+                return data
+            except Exception as exc:
+                errors.append(f"attempt {attempt}: {exc}")
+                if attempt == 1:
+                    print("Request failed; retrying without proxy:", url)
+
+        with self.failure_lock:
+            self.failed_requests.append(
+                {
+                    "term": term,
+                    "bookingcountry": bookingcountry,
+                    "url": url,
+                    "error": " | ".join(errors),
+                }
+            )
+        raise RuntimeError(
+            f"All request attempts failed for {url}: {' | '.join(errors)}"
+        )
 
     # -- EXTRACTION ----------------------------------------------------------
-    def _build_row(self, refid, websitecode, source_name, ss, bookingcountry,
-                    locationcode, is_airport, loctype, city_location, region,
-                    term, location_name, created_date):
+    def _build_row(
+        self,
+        refid,
+        websitecode,
+        source_name,
+        ss,
+        bookingcountry,
+        locationcode,
+        is_airport,
+        loctype,
+        city_location,
+        region,
+        term,
+        location_name,
+        created_date,
+    ):
         return {
-            "id":               refid,
-            "source_name":      source_name,
-            "website_code":     websitecode,
-            "pickup_location":  ss,
+            "id": refid,
+            "source_name": source_name,
+            "website_code": websitecode,
+            "pickup_location": ss,
             "location_country": bookingcountry,
-            "location_code":    locationcode,
-            "is_airport":       is_airport,
-            "created_date":     created_date,
-            "location_type":    loctype,
-            "city":             city_location,
-            "region":           region,
-            "priority_level":   "",
-            "location_term":    term,
-            "location_name":    location_name,
+            "location_code": locationcode,
+            "is_airport": is_airport,
+            "created_date": created_date,
+            "location_type": loctype,
+            "city": city_location,
+            "region": region,
+            "priority_level": "",
+            "location_term": term,
+            "location_name": location_name,
         }
 
-    def extraction(self, item, refid, websitecode, source_name, rows, seen_location_codes):
-        ss             = item["ss"]
-        domain         = item["domain"]
+    def extraction(
+        self, item, refid, websitecode, source_name, rows, seen_location_codes
+    ):
+        ss = item["ss"]
+        domain = item["domain"]
         bookingcountry = item["bookingcountry"]
-        city           = item["city"]
-        airport_name   = item["airport_name"]
-        city_location  = resolve_city_location(city, bookingcountry)
-        proxies        = self.get_proxy()
-        url            = f"https://{domain}/api/v4/typeahead/{ss}"
+        city = item["city"]
+        airport_name = item["airport_name"]
+        city_location = resolve_city_location(city, bookingcountry)
+        proxies = self.get_proxy()
+        url = f"https://{domain}/api/v4/typeahead/{ss}"
 
         location_list = self.fetch_location_list(ss, bookingcountry, proxies, url)
 
-        if not location_list.get("sr"):
-            location_list = self.fetch_location_list(city, bookingcountry, proxies, url)
-
         created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-        airport_row = None
-        city_row = None
-
         for i in location_list.get("sr", []):
-            loctype      = i.get("type")
+            loctype = i.get("type")
             region_names = i.get("regionNames") or {}
-            term         = region_names.get("fullName", "")
-            region       = region_names.get("shortName", "")
-            ess_id       = i.get("essId") or {}
+            term = region_names.get("fullName", "")
+            region = region_names.get("shortName", "")
+            ess_id = i.get("essId") or {}
             locationcode = str(ess_id.get("sourceId", ""))
 
             if not locationcode:
                 continue
 
-            # --- Airport match: term contains the IATA code, e.g. "Schiphol (AMS-...)" ---
-            if airport_row is None and (f"({ss}-" in term or f"({ss})" in term):
-                airport_row = self._build_row(
-                    refid, websitecode, source_name, ss, bookingcountry,
-                    locationcode, True, loctype, city_location, region,
-                    term, airport_name or term, created_date,
-                )
+            term_text = str(term or "")
+            airport_text = str(airport_name or "")
+            if ss not in term_text and airport_text.lower() not in term_text.lower():
                 continue
 
-            # --- City match: type is CITY and the city name shows up in the term ---
-            if (
-                city_row is None
-                and loctype == "CITY"
-                and city
-                and city.lower() in term.lower()
-            ):
-                city_row = self._build_row(
-                    refid, websitecode, source_name, ss, bookingcountry,
-                    locationcode, False, loctype, city_location, region,
-                    term, term, created_date,
-                )
-                continue
-
-            if airport_row and city_row:
-                break
-
-        for row in (airport_row, city_row):
-            if row is None:
-                continue
+            row = self._build_row(
+                refid,
+                websitecode,
+                source_name,
+                ss,
+                bookingcountry,
+                locationcode,
+                True,
+                loctype,
+                city_location,
+                region,
+                term_text,
+                airport_name or term_text,
+                created_date,
+            )
+            seen_key = (bookingcountry, row["location_code"])
             with self.seen_lock:
-                if row["location_code"] in seen_location_codes:
+                if seen_key in seen_location_codes:
                     continue
-                seen_location_codes.add(row["location_code"])
+                seen_location_codes.add(seen_key)
 
             inserted = self.insert_one(row)
             if inserted:
@@ -429,10 +513,15 @@ class expedia:
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
-        input_data = build_input_data()
+        input_data = build_input_data(self.target_terms)
+        if self.target_terms:
+            print(
+                "Target retry terms:",
+                ", ".join(sorted({t.upper() for t in self.target_terms})),
+            )
 
         for result in resultset:
-            refid       = result["id"]
+            refid = result["id"]
             websitecode = result["websitecode"]
             source_name = result["source_name"]
             rows = []
@@ -441,8 +530,13 @@ class expedia:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = [
                         executor.submit(
-                            self.extraction, item, refid, websitecode, source_name,
-                            rows, seen_location_codes,
+                            self.extraction,
+                            item,
+                            refid,
+                            websitecode,
+                            source_name,
+                            rows,
+                            seen_location_codes,
                         )
                         for item in input_data
                     ]
@@ -462,12 +556,53 @@ class expedia:
                 self.eHandling()
                 self.update(2, refid)
 
+        if self.failed_requests:
+            print("\nFAILED REQUESTS:")
+            for failure in self.failed_requests:
+                print(
+                    "-",
+                    failure["url"],
+                    "| term:",
+                    failure["term"],
+                    "| country:",
+                    failure["bookingcountry"],
+                    "| error:",
+                    failure["error"],
+                )
+
 
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
+    STATUS = "0"
+    STARTID = 205
+    ENDID = 205
+    INPUTTABLE = "input_locations"
+    OUTPUTTABLE = "locations"
+    PROXYID = "99"
+    MAX_WORKERS = 10
+
+    # 0 = normal run for all IATA codes.
+    # 1 = retry only the failed/missing IATA codes below.
+    RUN_MISSING_ONLY = 0
+    MISSING_IATA_TERMS = ["ABU"]
+
+    target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
+    if RUN_MISSING_ONLY:
+        STATUS = "any"
+
     SC = None
     try:
-        SC = expedia(0,199, 199, "input_locations", "locations", False, "59", max_workers=2)
+        SC = expedia(
+            STATUS,
+            STARTID,
+            ENDID,
+            INPUTTABLE,
+            OUTPUTTABLE,
+            False,
+            PROXYID,
+            max_workers=MAX_WORKERS,
+            target_terms=target_terms,
+        )
     except Exception:
         raise
         if SC:
