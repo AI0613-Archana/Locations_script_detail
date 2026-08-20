@@ -42,12 +42,12 @@ COUNTRY_CONFIG = {
     # "FR": ("expedia.fr",     "FR"),
     # "AU": ("expedia.com.au", "AU"),
     # "IE": ("expedia.ie",     "IE"),
-    "NO": ("expedia.no", "NO"),
+    # "NO": ("expedia.no", "NO"),
     # "TH": ("expedia.co.th",  "TH"),
     # "NL": ("expedia.nl", "NL"),
     # "AT": ("expedia.at",     "AT"),
     # "GB": ("expedia.co.uk",     "GB"),
-    # "BR": ("expedia.com.br", "BR"),
+    "BR": ("expedia.com.br", "BR"),
     # "CH": ("expedia.ch",     "CH"),
     # "CA": ("expedia.ca",     "CA"),
     # "DE": ("expedia.de",     "DE"),
@@ -68,12 +68,12 @@ LOCALE_MAP = {
     # "FR": "fr-FR,fr;q=0.9",
     # "AU": "en-AU,en;q=0.9",
     # "IE": "en-IE,en;q=0.9",
-    "NO": "nb-NO,nb;q=0.9",
+    # "NO": "nb-NO,nb;q=0.9",
     # "TH": "th-TH,th;q=0.9",
     # "NL": "nl-NL,nl;q=0.9",
     # "AT": "de-AT,de;q=0.9",
     # "GB": "en-GB,en;q=0.9",
-    # "BR": "pt-BR,pt;q=0.9",
+    "BR": "pt-BR,pt;q=0.9",
     # "CH": "de-CH,de;q=0.9",
     # "CA": "en-CA,en;q=0.9",
     # "DE": "de-DE,de;q=0.9",
@@ -575,8 +575,8 @@ class expedia:
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 211
-    ENDID = 211
+    STARTID = 199
+    ENDID = 199
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "99"
@@ -584,7 +584,7 @@ if __name__ == "__main__":
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
-    RUN_MISSING_ONLY = 1
+    RUN_MISSING_ONLY = 0
     MISSING_IATA_TERMS = [
         "AUR",
         "AUS",
