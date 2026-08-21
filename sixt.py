@@ -179,21 +179,24 @@ def build_input_data(target_terms=None):
         if target_terms and iata.upper() not in target_terms:
             continue
 
-        country = v["country"]
-        if country not in COUNTRY_CONFIG:
-            continue
+        # country = v["country"]
+        # if country not in COUNTRY_CONFIG:
+        #     continue
 
-        domain, bookingcountry = COUNTRY_CONFIG[country]
+        # domain, bookingcountry = COUNTRY_CONFIG[country]
 
-        rows.append(
-            {
-                "ss": iata,
-                "domain": domain,
-                "bookingcountry": bookingcountry,
-                "city": v["city"],
-                "airport_name": v["name"],
-            }
-        )
+        for country, (domain, bookingcountry) in COUNTRY_CONFIG.items():
+
+
+            rows.append(
+                {
+                    "ss": iata,
+                    "domain": domain,
+                    "bookingcountry": bookingcountry,
+                    "city": v["city"],
+                    "airport_name": v["name"],
+                }
+            )
 
     rows.sort(key=lambda r: (r["bookingcountry"], r["ss"]))
 
@@ -624,12 +627,12 @@ class sixt:
 
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
-    STATUS = "0"
+    STATUS = "1"
     STARTID = 239
     ENDID = 239
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
-    PROXYID = "99"
+    PROXYID = "59"
     MAX_WORKERS = 7
 
     # 0 = normal run for all IATA codes.
