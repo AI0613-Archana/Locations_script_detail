@@ -30,54 +30,54 @@ DB_CONFIG = {
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    "ES": ("expedia.es", "ES"),
-    "IT": ("expedia.it", "IT"),
-    "SG": ("expedia.com.sg", "SG"),
-    "US": ("expedia.com", "US"),
-    "JP": ("expedia.co.jp", "JP"),
-    "NZ": ("expedia.co.nz", "NZ"),
-    "SE": ("expedia.se", "SE"),
-    "MX": ("expedia.mx", "MX"),
-    "FI": ("expedia.fi", "FI"),
-    "FR": ("expedia.fr", "FR"),
-    "AU": ("expedia.com.au", "AU"),
-    "IE": ("expedia.ie", "IE"),
-    "NO": ("expedia.no", "NO"),
-    "TH": ("expedia.co.th", "TH"),
-    "NL": ("expedia.nl", "NL"),
-    "AT": ("expedia.at", "AT"),
-    "GB": ("expedia.co.uk", "GB"),
+    # "ES": ("expedia.es",     "ES"),
+    # "IT": ("expedia.it",     "IT"),
+    # "SG": ("expedia.com.sg", "SG"),
+    # "US": ("expedia.com",    "US"),
+    # "JP": ("expedia.co.jp",  "JP"),
+    # "NZ": ("expedia.co.nz",  "NZ"),
+    # "SE": ("expedia.se",     "SE"),
+    # "MX": ("expedia.mx",     "MX"),
+    # "FI": ("expedia.fi",     "FI"),
+    # "FR": ("expedia.fr",     "FR"),
+    # "AU": ("expedia.com.au", "AU"),
+    # "IE": ("expedia.ie",     "IE"),
+    # "NO": ("expedia.no", "NO"),
+    # "TH": ("expedia.co.th",  "TH"),
+    # "NL": ("expedia.nl", "NL"),
+    # "AT": ("expedia.at",     "AT"),
+    # "GB": ("expedia.co.uk",     "GB"),
     "BR": ("expedia.com.br", "BR"),
-    "CH": ("expedia.ch", "CH"),
-    "CA": ("expedia.ca", "CA"),
-    "DE": ("expedia.de", "DE"),
-    "DK": ("expedia.dk", "DK"),
+    # "CH": ("expedia.ch",     "CH"),
+    # "CA": ("expedia.ca",     "CA"),
+    # "DE": ("expedia.de",     "DE"),
+    # "DK": ("expedia.dk",     "DK"),
 }
 
 
 LOCALE_MAP = {
-    "ES": "es-ES,es;q=0.9",
-    "IT": "it-IT,it;q=0.9",
-    "SG": "en-SG,en;q=0.9",
-    "US": "en-US,en;q=0.9",
-    "JP": "ja-JP,ja;q=0.9",
-    "NZ": "en-NZ,en;q=0.9",
-    "SE": "sv-SE,sv;q=0.9",
-    "MX": "es-MX,es;q=0.9",
-    "FI": "fi-FI,fi;q=0.9",
-    "FR": "fr-FR,fr;q=0.9",
-    "AU": "en-AU,en;q=0.9",
-    "IE": "en-IE,en;q=0.9",
-    "NO": "nb-NO,nb;q=0.9",
-    "TH": "th-TH,th;q=0.9",
-    "NL": "nl-NL,nl;q=0.9",
-    "AT": "de-AT,de;q=0.9",
-    "GB": "en-GB,en;q=0.9",
+    # "ES": "es-ES,es;q=0.9",
+    # "IT": "it-IT,it;q=0.9",
+    # "SG": "en-SG,en;q=0.9",
+    # "US": "en-US,en;q=0.9",
+    # "JP": "ja-JP,ja;q=0.9",
+    # "NZ": "en-NZ,en;q=0.9",
+    # "SE": "sv-SE,sv;q=0.9",
+    # "MX": "es-MX,es;q=0.9",
+    # "FI": "fi-FI,fi;q=0.9",
+    # "FR": "fr-FR,fr;q=0.9",
+    # "AU": "en-AU,en;q=0.9",
+    # "IE": "en-IE,en;q=0.9",
+    # "NO": "nb-NO,nb;q=0.9",
+    # "TH": "th-TH,th;q=0.9",
+    # "NL": "nl-NL,nl;q=0.9",
+    # "AT": "de-AT,de;q=0.9",
+    # "GB": "en-GB,en;q=0.9",
     "BR": "pt-BR,pt;q=0.9",
-    "CH": "de-CH,de;q=0.9",
-    "CA": "en-CA,en;q=0.9",
-    "DE": "de-DE,de;q=0.9",
-    "DK": "da-DK,da;q=0.9",
+    # "CH": "de-CH,de;q=0.9",
+    # "CA": "en-CA,en;q=0.9",
+    # "DE": "de-DE,de;q=0.9",
+    # "DK": "da-DK,da;q=0.9",
 }
 
 
@@ -267,6 +267,7 @@ class expedia:
             headers=headers,
             proxies=proxies,
             timeout=30,
+            verify=False,
         )
 
     # -- DB ---------------------------------------------------------------------
@@ -574,8 +575,8 @@ class expedia:
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 205
-    ENDID = 205
+    STARTID = 199
+    ENDID = 199
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "99"
@@ -584,7 +585,65 @@ if __name__ == "__main__":
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
     RUN_MISSING_ONLY = 0
-    MISSING_IATA_TERMS = ["ABU"]
+    MISSING_IATA_TERMS = [
+        "AUR",
+        "AUS",
+        "AUT",
+        "AUU",
+        "AUW",
+        "AUX",
+        "AUY",
+        "AUZ",
+        "AVA",
+        "AVB",
+        "AVG",
+        "AVI",
+        "AVK",
+        "AVL",
+        "AVN",
+        "AVO",
+        "AVP",
+        "AVU",
+        "AVV",
+        "AVW",
+        "AVX",
+        "AWB",
+        "AWA",
+        "AWD",
+        "AWK",
+        "AWM",
+        "AWN",
+        "AWP",
+        "AWZ",
+        "AXA",
+        "AXC",
+        "AXB",
+        "AXD",
+        "AXE",
+        "AXF",
+        "AXG",
+        "AXK",
+        "AXJ",
+        "AXL",
+        "AXM",
+        "AXN",
+        "AXP",
+        "AXR",
+        "AXS",
+        "AXT",
+        "AXU",
+        "AXV",
+        "AXX",
+        "AYG",
+        "AYJ",
+        "AYL",
+        "AYM",
+        "AYN",
+        "AYO",
+        "AYP",
+        "AYQ",
+        "AYR",
+    ]
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
     if RUN_MISSING_ONLY:
