@@ -4,16 +4,16 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import airportsdata
 import psycopg2
+import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
-from tls_chameleon import TLSSession
-
 
 load_dotenv()
 
@@ -25,69 +25,195 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
+WORDWHEEL_URL = "https://loc.hertz.com/locations/WordWheel"
 
-class hertz_4:
+DIALECT_MAP = {
+    "AT": "deAT",
+    "BE": "nlNL",
+    "BG": "bgBG",
+    "CH": "deCH",
+    "CN": "zhCN",
+    "CZ": "csCZ",
+    "DE": "deDE",
+    "DK": "daDK",
+    "EE": "etEE",
+    "ES": "esES",
+    "FI": "fiFI",
+    "FR": "frFR",
+    "GB": "enGB",
+    "GR": "elGR",
+    "HR": "hrHR",
+    "IE": "enIE",
+    "IN": "enIN",
+    "IT": "itIT",
+    "JO": "enJO",
+    "LV": "lvLV",
+    "MT": "enMT",
+    "MU": "enMU",
+    "NL": "nlNL",
+    "NO": "nbNO",
+    "QA": "enQA",
+    "RO": "roRO",
+    "RS": "srRS",
+    "RU": "ruRU",
+    "SA": "enSA",
+    "SE": "svSE",
+    "SG": "enSG",
+    "SI": "slSI",
+    "TH": "thTH",
+    "TN": "frTN",
+    "UA": "ukUA",
+    "US": "enUS",
+}
+
+
+class hertz_2:
     def __init__(
-        self, status, startid, endid, inputtable, outputtable, offline, proxyid
+        self,
+        status,
+        startid,
+        endid,
+        inputtable,
+        outputtable,
+        offline,
+        proxyid,
+        max_workers=50,
+        target_terms=None,
     ):
         self.inputtable = inputtable
         self.outputtable = outputtable
         self.startid = startid
         self.endid = endid
         self.proxyid = proxyid
+        self.max_workers = int(max_workers)
+        self.target_terms = [
+            term.strip().upper() for term in (target_terms or []) if term.strip()
+        ]
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
         self.websitecode = 37
         self.is_dc_input = False
         self.iata_codes = set(airportsdata.load("IATA").keys())
+        self.active_iata_codes = self.build_iata_codes()
+        
+        self.db_lock = threading.Lock()
+        self.rows_lock = threading.Lock()
+        self.seen_lock = threading.Lock()
+        self.length_limits = self._get_length_limits(self.cursor)
+
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
         )
         self.proxyset = self.cursor.fetchall()
 
-        self.cursor.execute(
-            f"""
-            SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
-        """,
-            (str(self.websitecode), status, startid, endid),
-        )
+        if str(status).strip().lower() == "any":
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s AND id BETWEEN %s AND %s
+                ORDER BY id
+                """,
+                (self.websitecode, startid, endid),
+            )
+        else:
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
+                ORDER BY id
+                """,
+                (self.websitecode, status, startid, endid),
+            )
         resultset = self.cursor.fetchall()
         self.main(resultset)
+
+    def build_iata_codes(self):
+        if not self.target_terms:
+            return sorted(self.iata_codes)
+
+        valid_terms = []
+        invalid_terms = []
+        for term in self.target_terms:
+            if term in self.iata_codes:
+                valid_terms.append(term)
+            else:
+                invalid_terms.append(term)
+
+        if invalid_terms:
+            print("Skipping invalid IATA terms:", ", ".join(sorted(invalid_terms)))
+
+        print("Target retry terms:", ", ".join(sorted(valid_terms)))
+        return sorted(set(valid_terms))
 
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
         return {"http": proxy_url, "https": proxy_url}
 
-    def load(self, source_url, headers, params, proxies):
-        session = TLSSession(
-            profile="chrome_120",
-            proxies=proxies,
-            on_block="none",
-            max_retries=0,
-        )
-        return session.get(source_url, params=params, headers=headers, timeout=30)
+    def normalize_domain(self, domain):
+        domain = self.clean_text(domain)
+        domain = re.sub(r"^https?://", "", domain, flags=re.I).strip("/")
+        return domain
 
-    def fetch_location_response(self, source_url, headers, iata):
+    def load(self, source_url, headers, params, proxies):
+        return requests.get(
+            source_url,
+            params=params,
+            headers=headers,
+            proxies=proxies,
+            timeout=30,
+        )
+
+    def build_headers(self, domain):
+        domain = self.normalize_domain(domain)
+        chrome_major = 151
+        return {
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "referer": f"https://{domain}/",
+            "sec-ch-ua": (
+                f'"Not=A?Brand";v="99", "Google Chrome";v="{chrome_major}", '
+                f'"Chromium";v="{chrome_major}"'
+            ),
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Linux"',
+            "sec-fetch-dest": "script",
+            "sec-fetch-mode": "no-cors",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-storage-access": "active",
+            "user-agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                f"(KHTML, like Gecko) Chrome/{chrome_major}.0.0.0 Safari/537.36"
+            ),
+        }
+
+    def get_dialect(self, country_code):
+        country_code = self.clean_text(country_code).upper()
+        return DIALECT_MAP.get(country_code, f"en{country_code}")
+
+    def fetch_location_response(self, country_code, domain, iata):
         params = {
             "callback": "parse",
-            "dialect": "enUS",
+            "dialect": self.get_dialect(country_code),
             "systemId": "IRAC",
             "subSystemId": "IRAC",
             "searchText": iata.lower(),
         }
+        headers = self.build_headers(domain)
         proxies = self.get_proxy()
         try:
-            response = self.load(source_url, headers, params, proxies)
-            print("Query:", iata, "status:", response.status_code)
+            response = self.load(WORDWHEEL_URL, headers, params, proxies)
+            print(country_code, "Query:", iata, "status:", response.status_code)
             return iata, response.status_code, response.text
         except Exception as exc:
             print(
+                country_code,
                 "Query:",
                 iata,
                 "proxy failed:",
@@ -95,69 +221,78 @@ class hertz_4:
                 "error:",
                 exc,
             )
-            response = self.load(source_url, headers, params, {})
-            print("Query:", iata, "status:", response.status_code, "without proxy")
+            response = self.load(WORDWHEEL_URL, headers, params, {})
+            print(
+                country_code,
+                "Query:",
+                iata,
+                "status:",
+                response.status_code,
+                "without proxy",
+            )
             return iata, response.status_code, response.text
 
-    def insert(self, chunks):
-        if not chunks:
-            print("No rows supplied for insert.")
-            return
+    def _get_length_limits(self, cursor):
+        cursor.execute(
+            """
+            SELECT column_name, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name = %s
+              AND character_maximum_length IS NOT NULL
+            """,
+            (self.outputtable.split(".")[-1],),
+        )
+        return {
+            row["column_name"]: row["character_maximum_length"]
+            for row in cursor.fetchall()
+        }
 
-        print("INSERT INITIATED")
-        columns = [c for c in chunks[0].keys() if c != "id"]
+    def insert_one(self, row):
+        columns = [c for c in row.keys() if c != "id"]
         colnames = ",".join(columns)
-        sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES %s"
-        try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(
-                    """
-                    SELECT column_name, character_maximum_length
-                    FROM information_schema.columns
-                    WHERE table_name = %s
-                      AND character_maximum_length IS NOT NULL
-                    """,
-                    (self.outputtable.split(".")[-1],),
+        placeholders = ",".join(["%s"] * len(columns))
+        sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
+
+        value_row = []
+        for col in columns:
+            value = row.get(col)
+            max_len = self.length_limits.get(col)
+            if isinstance(value, str) and max_len and len(value) > max_len:
+                print(
+                    "Truncated",
+                    col,
+                    "from",
+                    len(value),
+                    "to",
+                    max_len,
+                    "for location_code",
+                    row.get("location_code"),
                 )
-                length_limits = {
-                    row["column_name"]: row["character_maximum_length"]
-                    for row in cursor.fetchall()
-                }
+                value = value[:max_len]
+            value_row.append(value)
 
-                values = []
-                for row in chunks:
-                    value_row = []
-                    for col in columns:
-                        value = row.get(col)
-                        max_length = length_limits.get(col)
-                        if (
-                            isinstance(value, str)
-                            and max_length
-                            and len(value) > max_length
-                        ):
-                            print(
-                                "Truncated",
-                                col,
-                                "from",
-                                len(value),
-                                "to",
-                                max_length,
-                                "for location_code",
-                                row.get("location_code"),
-                            )
-                            value = value[:max_length]
-                        value_row.append(value)
-                    values.append(tuple(value_row))
-
-                execute_values(cursor, sql, values, page_size=500)
-            self.conn.commit()
-        except Exception:
+        with self.db_lock:
             try:
-                self.conn.rollback()
+                self.cursor.execute(sql, tuple(value_row))
+                self.conn.commit()
+                print(
+                    "INSERTED |",
+                    "pickup:",
+                    row.get("pickup_location"),
+                    "| type:",
+                    row.get("location_type"),
+                    "| code:",
+                    row.get("location_code"),
+                )
+                return True
             except Exception:
-                pass
-            raise
-        print("INSERTED")
+                try:
+                    self.conn.rollback()
+                except Exception:
+                    pass
+                print("INSERT FAILED for location_code", row.get("location_code"))
+                self.eHandling()
+                return False
 
     def update(self, upstatus, refid):
         updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
@@ -214,40 +349,48 @@ class hertz_4:
 
         return ""
 
+    def should_process_result(self, result):
+        source_url = self.clean_text(result.get("source_url"))
+        if not source_url:
+            return True
+        return "loc.hertz.com/locations/WordWheel" in source_url
+
     def main(self, resultset):
+        if not resultset:
+            print("No input rows found.")
+            return
+
         for result in resultset:
             print(result)
+            if not self.should_process_result(result):
+                print(
+                    "Skipping non-WordWheel Hertz row:",
+                    result.get("id"),
+                    result.get("country"),
+                    result.get("source_url"),
+                )
+                continue
+
             refid = result["id"]
             websitecode = result["websitecode"]
             source_name = result["source_name"]
-            country = result["country"]
-            # source_url = result["source_url"] or "https://loc.hertz.com/locations/WordWheel"
-            source_url='https://loc.hertz.com/locations/WordWheel'
+            country = self.clean_text(result["country"]).upper()
+            domain = self.normalize_domain(
+                result.get("domainname") or result.get("website_url")
+            )
             rows = []
             seen_location_codes = set()
-            headers = {
-                "accept": "*/*",
-                "accept-language": "en-US,en;q=0.9",
-                "referer": "https://www.hertz.com/",
-                "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Linux"',
-                "sec-fetch-dest": "script",
-                "sec-fetch-mode": "no-cors",
-                "sec-fetch-site": "same-site",
-                "user-agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-                ),
-            }
 
             try:
-                with ThreadPoolExecutor(max_workers=100) as executor:
+                with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = [
                         executor.submit(
-                            self.fetch_location_response, source_url, headers, iata
+                            self.fetch_location_response,
+                            country,
+                            domain,
+                            iata,
                         )
-                        for iata in sorted(self.iata_codes)
+                        for iata in self.active_iata_codes
                     ]
                     for future in as_completed(futures):
                         iata, status_code, response_text = future.result()
@@ -262,9 +405,8 @@ class hertz_4:
                                 seen_location_codes,
                             )
 
-                print("Extracted:", len(rows))
+                print("Extracted:", len(rows), "country:", country)
                 if rows:
-                    self.insert(rows)
                     self.update(1, refid)
                 else:
                     self.update(2, refid)
@@ -293,31 +435,43 @@ class hertz_4:
 
             location_code = self.clean_text(location.get("preferredOag"))
             location_term = self.clean_text(location.get("displayText"))
-            if not location_code or not location_term or location_code in seen_location_codes:
+            seen_key = (country, location_code)
+            
+            if not location_code or not location_term:
                 continue
+
+            with self.seen_lock:
+                if seen_key in seen_location_codes:
+                    continue
+                seen_location_codes.add(seen_key)
 
             location_title = self.clean_text(location.get("locationTitle"))
             search_term = self.clean_text(location.get("searchTerm"))
             city = self.clean_text(location.get("city"))
-            region = self.clean_text(location.get("stateCode") or location.get("stateName"))
-            location_country = self.clean_text(location.get("countryCode") or country)
+            region = self.clean_text(
+                location.get("stateCode") or location.get("stateName")
+            )
+            location_country = country
             iata_code = self.extract_iata(location)
             airport_text = " ".join(
                 [location_term, location_title, search_term]
             ).lower()
             is_airport = bool(iata_code) or "airport" in airport_text
             location_type = "Airport" if is_airport else "City"
-            location_name = iata_code if is_airport and iata_code else location_title or search_term or location_term
+            location_name = (
+                iata_code
+                if is_airport and iata_code
+                else location_title or search_term or location_term
+            )
             pickup_location = location_name
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-            seen_location_codes.add(location_code)
             row = {
                 "id": refid,
                 "source_name": source_name,
                 "website_code": websitecode,
                 "pickup_location": pickup_location,
-                "location_country": 'US',
+                "location_country": location_country,
                 "location_code": location_code,
                 "is_airport": is_airport,
                 "created_date": created_date,
@@ -328,34 +482,65 @@ class hertz_4:
                 "location_term": location_term,
                 "location_name": location_name,
             }
-            rows.append(row)
+
+            inserted = self.insert_one(row)
+            if inserted:
+                with self.rows_lock:
+                    rows.append(row)
 
 
 if __name__ == "__main__":
+    STATUS = "any"
+    STARTID = 95
+    ENDID = 95
+    INPUTTABLE = "input_locations"
+    OUTPUTTABLE = "locations"
+    OFFLINE = False
+    PROXYID = "60"
+    MAX_WORKERS = 25
+
+    # 0 = normal run for all IATA codes.
+    # 1 = retry only the failed/missing IATA codes below.
+    RUN_MISSING_ONLY = 0
+    MISSING_IATA_TERMS = [
+        "AUR",
+        "AUS",
+        "AYO",
+        "AYP",
+        "AYQ",
+        "AYR",
+    ]
+
+    target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
+    if RUN_MISSING_ONLY:
+        STATUS = "any"
 
     SC = None
     try:
-        # SC = hertz_4(0, 135, 135, "input_locations", "locations", False, "20")
+        if len(sys.argv) >= 8:
+            (
+                script,
+                STATUS,
+                STARTID,
+                ENDID,
+                INPUTTABLE,
+                OUTPUTTABLE,
+                OFFLINE,
+                PROXYID,
+                *extra_args,
+            ) = sys.argv
+            MAX_WORKERS = int(extra_args[0]) if extra_args else MAX_WORKERS
 
-
-        (
-            script,
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        ) = sys.argv
-        SC = hertz_4(
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
+        SC = hertz_2(
+            STATUS,
+            STARTID,
+            ENDID,
+            INPUTTABLE,
+            OUTPUTTABLE,
+            OFFLINE,
+            PROXYID,
+            max_workers=MAX_WORKERS,
+            target_terms=target_terms,
         )
     except Exception:
         if SC:
