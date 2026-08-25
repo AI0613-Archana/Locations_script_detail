@@ -48,7 +48,7 @@ DIALECT_MAP = {
     "IN": "enUS",
     "IT": "itIT",
     "JO": "enGB",
-    "LV": "lvLV",
+    "LV": "enGB",
     "MT": "enMT",
     "MU": "enMU",
     "NL": "nlNL",
