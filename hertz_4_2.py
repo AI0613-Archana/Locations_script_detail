@@ -67,7 +67,7 @@ DIALECT_MAP = {
 }
 
 
-class hertz_2:
+class hertz_4_2:
     def __init__(
         self,
         status,
@@ -531,7 +531,7 @@ if __name__ == "__main__":
             ) = sys.argv
             MAX_WORKERS = int(extra_args[0]) if extra_args else MAX_WORKERS
 
-        SC = hertz_2(
+        SC = hertz_4_2(
             STATUS,
             STARTID,
             ENDID,
