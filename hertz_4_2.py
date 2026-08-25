@@ -95,7 +95,7 @@ class hertz_4_2:
         self.is_dc_input = False
         self.iata_codes = set(airportsdata.load("IATA").keys())
         self.active_iata_codes = self.build_iata_codes()
-        
+
         self.db_lock = threading.Lock()
         self.rows_lock = threading.Lock()
         self.seen_lock = threading.Lock()
@@ -403,6 +403,7 @@ class hertz_4_2:
                                 source_name,
                                 rows,
                                 seen_location_codes,
+                                iata,
                             )
 
                 print("Extracted:", len(rows), "country:", country)
@@ -415,7 +416,15 @@ class hertz_4_2:
                 self.update(2, refid)
 
     def extraction(
-        self, html, refid, country, websitecode, source_name, rows, seen_location_codes
+        self,
+        html,
+        refid,
+        country,
+        websitecode,
+        source_name,
+        rows,
+        seen_location_codes,
+        iata,
     ):
         if not html:
             return
@@ -436,7 +445,7 @@ class hertz_4_2:
             location_code = self.clean_text(location.get("preferredOag"))
             location_term = self.clean_text(location.get("displayText"))
             seen_key = (country, location_code)
-            
+
             if not location_code or not location_term:
                 continue
 
@@ -451,7 +460,8 @@ class hertz_4_2:
             region = self.clean_text(
                 location.get("stateCode") or location.get("stateName")
             )
-            location_country = country
+            booking_country = country
+            location_country=location.get("countryCode") or airportsdata.load("IATA").get(iata, {}).get("country", "")
             iata_code = self.extract_iata(location)
             airport_text = " ".join(
                 [location_term, location_title, search_term]
@@ -481,6 +491,7 @@ class hertz_4_2:
                 "priority_level": "",
                 "location_term": location_term,
                 "location_name": location_name,
+                "booking_country": booking_country,
             }
 
             inserted = self.insert_one(row)
@@ -491,13 +502,13 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 95
-    ENDID = 95
+    STARTID = 127
+    ENDID = 127
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
     PROXYID = "60"
-    MAX_WORKERS = 25
+    MAX_WORKERS = 20
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
