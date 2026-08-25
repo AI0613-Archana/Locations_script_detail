@@ -12,7 +12,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -24,6 +23,25 @@ DB_CONFIG = {
 }
 
 
+def connect_db():
+    missing = [key for key, value in DB_CONFIG.items() if value in (None, "")]
+    if missing:
+        raise RuntimeError("Missing database environment values: " + ", ".join(missing))
+
+    try:
+        conn = psycopg2.connect(connect_timeout=15, **DB_CONFIG)
+        print("Connected to PostgreSQL successfully.")
+        return conn
+    except psycopg2.OperationalError as exc:
+        host = DB_CONFIG.get("host")
+        port = DB_CONFIG.get("port")
+        dbname = DB_CONFIG.get("dbname")
+        user = DB_CONFIG.get("user")
+        raise RuntimeError(
+            f"Database connection failed for {user}@{host}:{port}/{dbname}"
+        ) from exc
+
+
 class hertz_1:
     def __init__(
         self, status, startid, endid, inputtable, outputtable, offline, proxyid
@@ -33,7 +51,7 @@ class hertz_1:
         self.startid = startid
         self.endid = endid
         self.proxyid = proxyid
-        self.conn = psycopg2.connect(**DB_CONFIG)
+        self.conn = connect_db()
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
         self.websitecode = 37
         self.is_dc_input = False
@@ -45,9 +63,9 @@ class hertz_1:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
-            (str(self.websitecode), status, startid, endid),
+            (self.websitecode, status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -55,7 +73,9 @@ class hertz_1:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -227,6 +247,7 @@ class hertz_1:
                 self.eHandling()
                 self.update(2, refid)
 
+
     def extraction(
         self, html, refid, country, websitecode, source_name, rows, seen_location_codes
     ):
@@ -310,26 +331,26 @@ if __name__ == "__main__":
 
     SC = None
     try:
-        # SC = hertz_1(0, 136, 136, "input_locations", "locations", False, "59")
-        (
-            script,
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        ) = sys.argv
-        SC = hertz_1(
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        )
+        SC = hertz_1(0, 136, 136, "input_locations", "locations", False, "59")
+        # (
+        #     script,
+        #     status,
+        #     startid,
+        #     endid,
+        #     inputtable,
+        #     outputtable,
+        #     offline,
+        #     proxyid,
+        # ) = sys.argv
+        # SC = hertz_1(
+        #     status,
+        #     startid,
+        #     endid,
+        #     inputtable,
+        #     outputtable,
+        #     offline,
+        #     proxyid,
+        # )
     except Exception:
         if SC:
             SC.eHandling()

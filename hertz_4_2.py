@@ -49,7 +49,7 @@ DIALECT_MAP = {
     "IT": "itIT",
     "JO": "enGB",
     "LV": "enGB",
-    "MT": "enMT",
+    "MT": "enGB",
     "MU": "enMU",
     "NL": "nlNL",
     "NO": "noNO",
@@ -503,13 +503,13 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 98
-    ENDID = 98
+    STARTID = 118
+    ENDID = 118
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
     PROXYID = "60"
-    MAX_WORKERS = 25
+    MAX_WORKERS = 30
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
