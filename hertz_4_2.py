@@ -51,7 +51,7 @@ DIALECT_MAP = {
     "MT": "enMT",
     "MU": "enMU",
     "NL": "nlNL",
-    "NO": "nbNO",
+    "NO": "noNO",
     "QA": "enQA",
     "RO": "roRO",
     "RS": "srRS",
