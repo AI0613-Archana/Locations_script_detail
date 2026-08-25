@@ -284,14 +284,14 @@ class hertz_1:
             is_airport = True if depot_type.lower() == "airport" else False
             location_type = "Airport" if is_airport else "City"
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
+            booking_country=country
             seen_location_codes.add(location_code)
             row = {
                 "id": refid,
                 "source_name": source_name,
                 "website_code": websitecode,
                 "pickup_location": pickup_location,
-                "location_country":"ZA",
+                "location_country":location_country,
                 "location_code": location_code,
                 "is_airport": is_airport,
                 "created_date": created_date,
@@ -301,6 +301,7 @@ class hertz_1:
                 "priority_level": "",
                 "location_term": pickup_location,
                 "location_name": pickup_location,
+                "booking_country":booking_country,
             }
             rows.append(row)
 

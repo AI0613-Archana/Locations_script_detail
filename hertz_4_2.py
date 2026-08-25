@@ -31,7 +31,8 @@ DIALECT_MAP = {
     "AT": "deAT",
     "BE": "nlNL",
     "BG": "bgBG",
-    "CH": "deCH",
+    "BH": "enGB",
+    "CH": "deDE",
     "CN": "zhCN",
     "CZ": "csCZ",
     "DE": "deDE",
@@ -43,22 +44,22 @@ DIALECT_MAP = {
     "GB": "enGB",
     "GR": "elGR",
     "HR": "hrHR",
-    "IE": "enIE",
-    "IN": "enIN",
+    "IE": "enGB",
+    "IN": "enUS",
     "IT": "itIT",
-    "JO": "enJO",
+    "JO": "enGB",
     "LV": "lvLV",
     "MT": "enMT",
     "MU": "enMU",
     "NL": "nlNL",
-    "NO": "noNO",
+    "NO": "nbNO",
     "QA": "enQA",
     "RO": "roRO",
     "RS": "srRS",
-    "RU": "ruRU",
-    "SA": "enSA",
+    "RU": "enUS",
+    "SA": "enGB",
     "SE": "svSE",
-    "SG": "enSG",
+    "SG": "enUS",
     "SI": "slSI",
     "TH": "thTH",
     "TN": "frTN",
@@ -502,13 +503,13 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 127
-    ENDID = 127
+    STARTID = 98
+    ENDID = 98
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
     PROXYID = "60"
-    MAX_WORKERS = 20
+    MAX_WORKERS = 25
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
