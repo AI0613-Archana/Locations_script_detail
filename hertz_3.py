@@ -552,7 +552,7 @@ if __name__ == "__main__":
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
-    RUN_MISSING_ONLY = 1
+    RUN_MISSING_ONLY = 0
     MISSING_IATA_TERMS = [
         "ATH",
     ]
