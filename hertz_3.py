@@ -541,13 +541,13 @@ class hertz_3:
 
 
 if __name__ == "__main__":
-    STATUS = "any"
+    STATUS = "0"
     STARTID = 108
     ENDID = 108
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
-    PROXYID = "59"
+    PROXYID = "60"
     MAX_WORKERS = 50
 
     # 0 = normal run for all IATA codes.
