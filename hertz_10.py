@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import os
 import random
 import re
@@ -12,7 +13,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -24,6 +24,25 @@ DB_CONFIG = {
 }
 
 
+def connect_db():
+    missing = [key for key, value in DB_CONFIG.items() if value in (None, "")]
+    if missing:
+        raise RuntimeError("Missing database environment values: " + ", ".join(missing))
+
+    try:
+        conn = psycopg2.connect(connect_timeout=15, **DB_CONFIG)
+        print("Connected to PostgreSQL successfully.")
+        return conn
+    except psycopg2.OperationalError as exc:
+        host = DB_CONFIG.get("host")
+        port = DB_CONFIG.get("port")
+        dbname = DB_CONFIG.get("dbname")
+        user = DB_CONFIG.get("user")
+        raise RuntimeError(
+            f"Database connection failed for {user}@{host}:{port}/{dbname}"
+        ) from exc
+
+
 class hertz_10:
     def __init__(
         self, status, startid, endid, inputtable, outputtable, offline, proxyid
@@ -33,7 +52,7 @@ class hertz_10:
         self.startid = startid
         self.endid = endid
         self.proxyid = proxyid
-        self.conn = psycopg2.connect(**DB_CONFIG)
+        self.conn = connect_db()
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
         self.websitecode = 37
         self.is_dc_input = False
@@ -42,20 +61,33 @@ class hertz_10:
         )
         self.proxyset = self.cursor.fetchall()
 
-        self.cursor.execute(
-            f"""
-            SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
-        """,
-            (str(self.websitecode), status, startid, endid),
-        )
+        if str(status).strip().lower() == "any":
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s AND id BETWEEN %s AND %s
+                ORDER BY id
+                """,
+                (self.websitecode, startid, endid),
+            )
+        else:
+            self.cursor.execute(
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
+                ORDER BY id
+                """,
+                (self.websitecode, status, startid, endid),
+            )
         resultset = self.cursor.fetchall()
         self.main(resultset)
 
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
@@ -233,14 +265,86 @@ class hertz_10:
         if not html:
             return
 
+        if html.strip().startswith("{"):
+            try:
+                response_data = json.loads(html)
+                items = (
+                    response_data.get("data", [])
+                    if isinstance(response_data, dict)
+                    else []
+                )
+                if isinstance(items, list) and items:
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        pickup_location = re.sub(
+                            r"\s+", " ", str(item.get("title") or item.get("name") or "")
+                        ).strip()
+                        location_code = re.sub(
+                            r"\s+", " ", str(item.get("location_id") or "")
+                        ).strip()
+                        if not pickup_location or not location_code:
+                            continue
+                        if location_code in seen_location_codes:
+                            continue
+
+                        loc_type_raw = str(item.get("location_type") or "").lower()
+                        is_airport = (
+                            True
+                            if "airport" in loc_type_raw
+                            or "airport" in pickup_location.lower()
+                            else False
+                        )
+                        location_type = "Airport" if is_airport else "City"
+                        city = ""
+                        if "Abu Dhabi" in pickup_location:
+                            city = "Abu Dhabi"
+                        elif "Dubai" in pickup_location:
+                            city = "Dubai"
+                        elif "Sharjah" in pickup_location:
+                            city = "Sharjah"
+                        elif (
+                            "Ras Al Khaimah" in pickup_location
+                            or "RAK" in pickup_location
+                        ):
+                            city = "Ras Al Khaimah"
+
+                        created_date = datetime.now(timezone.utc).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                        seen_location_codes.add(location_code)
+                        row = {
+                            "id": refid,
+                            "source_name": source_name,
+                            "website_code": websitecode,
+                            "pickup_location": pickup_location,
+                            "location_country": country,
+                            "location_code": location_code,
+                            "is_airport": is_airport,
+                            "created_date": created_date,
+                            "location_type": location_type,
+                            "city": city,
+                            "region": "",
+                            "priority_level": "",
+                            "location_term": pickup_location,
+                            "location_name": pickup_location,
+                            "booking_country": country,
+                        }
+                        rows.append(row)
+                    return
+            except Exception:
+                pass
+
         location_code_mapping = {
             "Abu Dhabi Airport": "64",
             "Al Reef, Abu Dhabi": "122",
+            "Dubai Motor City": "56",
             "Car Rental in Dubai Motor City": "56",
             "Dubai Airport Terminal 1": "50",
             "Dubai Airport Terminal 2": "51",
             "Dubai Airport Terminal 3": "53",
             "Dubai Festival City": "59",
+            "Dubai Festival City Intercon": "59",
             "Dubai Festival City Mall": "43",
             "Dubai Head Office, Al Rashidiya": "60",
             "Dubai Marina": "57",
@@ -248,9 +352,30 @@ class hertz_10:
             "Abu Dhabi Mall": "69",
             "Dubai VOCO Hotel by IHG Trade Centre": "45",
             "Sharjah Airport": "82",
+            "Dubai Toyota Service Centre – Al Badia (Delivery and Collection only)": "44",
+            "Dubai Toyota Service Centre - Al Badia (Delivery and Collection only)": "44",
             "Toyota Service Center - Al Badia Dubai": "44",
             "Toyota Service Center – Al Badia Dubai": "44",
             "Dubai Festival Plaza Mall": "31",
+        }
+
+        slug_mapping = {
+            "abu-dhabi-airport": "64",
+            "al-reef-abu-dhabi": "122",
+            "dubai-motor-city": "56",
+            "dubai-airport-terminal-1": "50",
+            "dubai-airport-terminal-2": "51",
+            "dubai-airport-terminal-3": "53",
+            "dubai-festival-city": "59",
+            "dubai-festival-city-mall": "43",
+            "dubai-head-office-al-rashidiya": "60",
+            "dubai-marina": "57",
+            "rak-al-hamra-village-residence": "77",
+            "abu-dhabi-mall": "69",
+            "voco-hotel-trade-centre": "45",
+            "sharjah-airport": "82",
+            "toyota-service-center-al-badia-dubai": "44",
+            "dubai-festival-plaza-mall": "31",
         }
 
         soup = BeautifulSoup(html, "html.parser")
@@ -272,15 +397,19 @@ class hertz_10:
             if not pickup_location:
                 continue
 
-            location_code = re.sub(
-                r"\s+", " ", str(location_code_mapping.get(pickup_location, ""))
-            ).strip()
+            href = str(link.get("href") or "").strip()
+            slug = href.strip("/").split("/")[-1]
+
+            location_code = (
+                location_code_mapping.get(pickup_location)
+                or slug_mapping.get(slug)
+                or ""
+            )
             if not location_code:
                 continue
             if location_code in seen_location_codes:
                 continue
 
-            href = str(link.get("href") or "")
             p_tags = link.find_all("p", class_="text-md-regular")
             address = (
                 re.sub(r"\s+", " ", p_tags[0].get_text(" ", strip=True)).strip()
@@ -297,7 +426,11 @@ class hertz_10:
             elif "Ras Al Khaimah" in address or "RAK" in pickup_location:
                 city = "Ras Al Khaimah"
 
-            is_airport = True if "airport" in href.lower() or "airport" in pickup_location.lower() else False
+            is_airport = (
+                True
+                if "airport" in href.lower() or "airport" in pickup_location.lower()
+                else False
+            )
             location_type = "Airport" if is_airport else "City"
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -307,7 +440,7 @@ class hertz_10:
                 "source_name": source_name,
                 "website_code": websitecode,
                 "pickup_location": pickup_location,
-                "location_country":"AE",
+                "location_country": country,
                 "location_code": location_code,
                 "is_airport": is_airport,
                 "created_date": created_date,
@@ -317,34 +450,43 @@ class hertz_10:
                 "priority_level": "",
                 "location_term": pickup_location,
                 "location_name": pickup_location,
+                "booking_country": country,
             }
             rows.append(row)
 
 
 if __name__ == "__main__":
+    STATUS = "any"
+    STARTID = 94
+    ENDID = 94
+    INPUTTABLE = "input_locations"
+    OUTPUTTABLE = "locations"
+    OFFLINE = False
+    PROXYID = "60"
 
     SC = None
     try:
-        # SC = hertz_10(0, 94, 94, "input_locations", "locations", False, "20")
+        if len(sys.argv) >= 8:
+            (
+                script,
+                STATUS,
+                STARTID,
+                ENDID,
+                INPUTTABLE,
+                OUTPUTTABLE,
+                OFFLINE,
+                PROXYID,
+                *extra_args,
+            ) = sys.argv
 
-        (
-            script,
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        ) = sys.argv
         SC = hertz_10(
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
+            STATUS,
+            STARTID,
+            ENDID,
+            INPUTTABLE,
+            OUTPUTTABLE,
+            OFFLINE,
+            PROXYID,
         )
     except Exception:
         if SC:
