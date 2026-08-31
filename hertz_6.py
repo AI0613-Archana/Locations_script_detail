@@ -347,7 +347,7 @@ if __name__ == "__main__":
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
-    PROXYID = "1,2,3"
+    PROXYID = "60"
 
     SC = None
     try:
