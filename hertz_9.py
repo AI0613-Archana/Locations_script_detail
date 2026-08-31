@@ -13,7 +13,6 @@ from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
 
-
 load_dotenv()
 
 DB_CONFIG = {
@@ -46,9 +45,9 @@ class hertz_9:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
-            (str(self.websitecode), status, startid, endid),
+            (self.websitecode, status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -56,7 +55,9 @@ class hertz_9:
     def get_proxy(self):
         if not self.proxyset:
             return {}
-        proxy_str = (self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or "").strip()
+        proxy_str = (
+            self.proxyset[random.randrange(0, len(self.proxyset))].get("proxy") or ""
+        ).strip()
         if not proxy_str:
             return {}
         proxy_str = re.sub(r"(rentalcars-res-)[A-Z]{2}", r"\1IL", proxy_str)
@@ -93,17 +94,13 @@ class hertz_9:
             "state": country_info["state"],
         }
         try:
-            station_response = self.load(
-                source_url, headers, station_params, proxies
-            )
+            station_response = self.load(source_url, headers, station_params, proxies)
             print(country_info["fcid"], "station status:", station_response.status_code)
             return country_info, station_response.status_code, station_response.text
         except Exception as exc:
             print(country_info["fcid"], "station error:", exc)
             try:
-                station_response = self.load(
-                    source_url, headers, station_params, {}
-                )
+                station_response = self.load(source_url, headers, station_params, {})
                 print(
                     country_info["fcid"],
                     "station status:",
@@ -254,15 +251,23 @@ class hertz_9:
                         "error:",
                         exc,
                     )
-                    country_response = self.load(source_url, headers, country_params, {})
-                    print("Country status:", country_response.status_code, "without proxy")
+                    country_response = self.load(
+                        source_url, headers, country_params, {}
+                    )
+                    print(
+                        "Country status:", country_response.status_code, "without proxy"
+                    )
 
                 if country_response.status_code != 200:
                     self.update(2, refid)
                     continue
 
                 country_payload = json.loads(country_response.text or "[]")
-                country_data = country_payload.get("data", []) if isinstance(country_payload, dict) else country_payload
+                country_data = (
+                    country_payload.get("data", [])
+                    if isinstance(country_payload, dict)
+                    else country_payload
+                )
                 if not isinstance(country_data, list):
                     country_data = []
 
@@ -272,18 +277,34 @@ class hertz_9:
                     country_name = ""
                     if isinstance(country_row, dict):
                         for key in ("Item1", "Value", "value", "id"):
-                            raw_id = re.sub(r"\s+", " ", str(country_row.get(key) or "").replace("\xa0", " ")).strip()
+                            raw_id = re.sub(
+                                r"\s+",
+                                " ",
+                                str(country_row.get(key) or "").replace("\xa0", " "),
+                            ).strip()
                             if raw_id:
                                 break
                         for key in ("Item2", "Text", "text", "label", "name"):
-                            country_name = re.sub(r"\s+", " ", str(country_row.get(key) or "").replace("\xa0", " ")).strip()
+                            country_name = re.sub(
+                                r"\s+",
+                                " ",
+                                str(country_row.get(key) or "").replace("\xa0", " "),
+                            ).strip()
                             if country_name:
                                 break
                     elif isinstance(country_row, (list, tuple)):
                         if len(country_row) > 0:
-                            raw_id = re.sub(r"\s+", " ", str(country_row[0] or "").replace("\xa0", " ")).strip()
+                            raw_id = re.sub(
+                                r"\s+",
+                                " ",
+                                str(country_row[0] or "").replace("\xa0", " "),
+                            ).strip()
                         if len(country_row) > 1:
-                            country_name = re.sub(r"\s+", " ", str(country_row[1] or "").replace("\xa0", " ")).strip()
+                            country_name = re.sub(
+                                r"\s+",
+                                " ",
+                                str(country_row[1] or "").replace("\xa0", " "),
+                            ).strip()
 
                     if not raw_id:
                         continue
@@ -294,7 +315,9 @@ class hertz_9:
                     else:
                         country_code = raw_id
                         state_code = ""
-                    fcid = f"{country_code};{state_code}" if state_code else country_code
+                    fcid = (
+                        f"{country_code};{state_code}" if state_code else country_code
+                    )
                     country_label = country_name.split(",", 1)[0].strip()
                     countries.append(
                         {
@@ -356,7 +379,11 @@ class hertz_9:
             return
 
         response_data = json.loads(html)
-        locations = response_data.get("data", []) if isinstance(response_data, dict) else response_data
+        locations = (
+            response_data.get("data", [])
+            if isinstance(response_data, dict)
+            else response_data
+        )
         if not isinstance(locations, list):
             return
 
@@ -371,18 +398,26 @@ class hertz_9:
             station_name = ""
             if isinstance(location, dict):
                 for key in ("Item1", "Value", "value", "id", "Code", "code"):
-                    station_id = re.sub(r"\s+", " ", str(location.get(key) or "").replace("\xa0", " ")).strip()
+                    station_id = re.sub(
+                        r"\s+", " ", str(location.get(key) or "").replace("\xa0", " ")
+                    ).strip()
                     if station_id:
                         break
                 for key in ("Item2", "Text", "text", "label", "name", "Name"):
-                    station_name = re.sub(r"\s+", " ", str(location.get(key) or "").replace("\xa0", " ")).strip()
+                    station_name = re.sub(
+                        r"\s+", " ", str(location.get(key) or "").replace("\xa0", " ")
+                    ).strip()
                     if station_name:
                         break
             else:
                 if len(location) > 0:
-                    station_id = re.sub(r"\s+", " ", str(location[0] or "").replace("\xa0", " ")).strip()
+                    station_id = re.sub(
+                        r"\s+", " ", str(location[0] or "").replace("\xa0", " ")
+                    ).strip()
                 if len(location) > 1:
-                    station_name = re.sub(r"\s+", " ", str(location[1] or "").replace("\xa0", " ")).strip()
+                    station_name = re.sub(
+                        r"\s+", " ", str(location[1] or "").replace("\xa0", " ")
+                    ).strip()
 
             station_name = re.sub(
                 r"^(?:red|green|blue|yellow|orange|black|white)_",
@@ -396,10 +431,10 @@ class hertz_9:
             location_code = f"{station_id}|{fcid}|{country_name}"
             if location_code in seen_location_codes:
                 continue
-            if 'Airport' in station_name:
-                is_airport=True
+            if "Airport" in station_name:
+                is_airport = True
             else:
-                is_airport=False
+                is_airport = False
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             seen_location_codes.add(location_code)
             row = {
@@ -417,6 +452,7 @@ class hertz_9:
                 "priority_level": "",
                 "location_term": station_name,
                 "location_name": station_name,
+                "booking_country":country,
             }
             rows.append(row)
 
@@ -425,7 +461,7 @@ if __name__ == "__main__":
 
     SC = None
     try:
-        # SC = hertz_9(0, 111, 111, "input_locations", "locations", False, "20")
+        # SC = hertz_9(2, 111, 111, "input_locations", "locations", False, "60")
 
         (
             script,
