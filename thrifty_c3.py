@@ -5,20 +5,19 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
-import tls_client
+
 import psycopg2
+import tls_client
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor, execute_values
-from tls_chameleon import TLSSession
-session = tls_client.Session(
-
-    client_identifier="chrome112",
-
-    random_tls_extension_order=True
-
-)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+SOURCE_NAME = "thriftyuae.com"
+WEBSITE_CODE = 58
+SOURCE_URL = "https://www.thriftyuae.com/api/branch"
+
+DEBUG_DUMP_RESPONSE = os.getenv("DEBUG_DUMP_RESPONSE", "0") == "1"
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
@@ -28,82 +27,84 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
-SOURCE_NAME = "thriftyuae"
-WEBSITE_CODE = 58
-SOURCE_URL = "https://www.thriftyuae.com/api/branch"
-
-session = TLSSession(
-    profile="chrome_124_linux",
-    randomize=True,
-    http2_priority="chrome",
-)
-
 COOKIES = {
-    "cf_clearance": "Izi9PvARMticXL1TdvETglpgruEVadhTDWn_bYmhE0g-1781859805-1.2.1.1-8rSgSMqvnYSnAcDpzusRVHBBDsC9opjSSg0VF27Tjf5vrygbNneaGct8qcT8xQhcPHrTVcJL25MCWTFSMbJKZud9gFoOCu3c188ByOM0r6875QGYzQpDvtUJlJv1f84R8GMEEiSubNh4bblM95HPOdwZZT_lHtDRHt4yI9m9UYF_mYOaA4bjjIg_a0TRuiunTgYuSyoIl5RzqY1Mdw0WmOyulYxhuV2LMEqhvYrAeMv6SgmUhb9fJQiFBG0P3aM8.33orBMWoIXhnDg5ZgpfRN3XCrbZY5SVQDU.6DAK6RP0.UUm0RzADVtoVoV39SoHZNrvqdEeDdoDwtGHH88WbA",
+    '__Host-next-auth.csrf-token': 'd495235640bfd15f44a4fb7cb7a08b4087d6088b7904e40bfb134f6c53b5f2fa%7C27afcbb606ac57573968406839c4e4cae0b5549b2747300fd333873100c64f83',
+    '__Secure-next-auth.callback-url': 'https%3A%2F%2Fwww.thriftyuae.com',
+    '_ga': 'GA1.1.844887717.1788155134',
+    '_fbp': 'fb.1.1788155140762.261373895502443706',
+    '_gcl_au': '1.1.712860749.1788155134.899420487.1788155185.1788155185.518287400.1788155185.1788155185',
+    '_ga_9XYLGBCRGZ': 'GS2.1.s1788155134$o1$g1$t1788155228$j60$l0$h646182805',
+    'cf_clearance': 'az_AFJar2WXmpgRvHHscBCFFsz8Yl5Cl2SPLuHRYrqI-1788156331-1.2.1.1-wphFCb1.4VWwtxgiX2Z5Gk8wJMvVUDjykb0rrJUfuAbSu3GW4AFrfP95FhCQVjEkrAM1jKYZmKNBLNO6ypcUsLPYRXz34dEG_wz.2JaPl_gJFscczkksBfefywSAjyBUthq2q.3TQoDm7eNKnIzSKep5OiyB9abSvvv4WXBlie9imY1flRbZYL3ZxFPUpTCu.tWSqsg9WqY8XG5LhYrAqQoXK5ua4qr9179rkRVTIKroHpF.oKFRlfsP9Np8C56_sM0qOrYtouCY7IQ0c8.muzCgbS4ve78GIQ18mf80Z1YohBbsX4EWIc1u6CUAD3UV7NUxczOtcHSqqseOpGKZoEDVW3Bnl0rIbA5xBkPsYYA',
 }
+
 
 HEADERS = {
-    "accept": "*/*",
-    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
-    "priority": "u=1, i",
-    "referer": "https://www.thriftyuae.com/",
-    "sec-ch-ua": '"Chromium";v="149", "Not)A;Brand";v="24"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Linux"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "user-agent": (
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-    ),
+    'accept': '*/*',
+    'accept-language': 'en-US,en;q=0.9',
+    'priority': 'u=1, i',
+    'referer': 'https://www.thriftyuae.com/',
+    'sec-ch-ua': '"Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Linux"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
+    # 'cookie': '__Host-next-auth.csrf-token=d495235640bfd15f44a4fb7cb7a08b4087d6088b7904e40bfb134f6c53b5f2fa%7C27afcbb606ac57573968406839c4e4cae0b5549b2747300fd333873100c64f83; __Secure-next-auth.callback-url=https%3A%2F%2Fwww.thriftyuae.com; _ga=GA1.1.844887717.1788155134; _fbp=fb.1.1788155140762.261373895502443706; _gcl_au=1.1.712860749.1788155134.899420487.1788155185.1788155185.518287400.1788155185.1788155185; _ga_9XYLGBCRGZ=GS2.1.s1788155134$o1$g1$t1788155228$j60$l0$h646182805; cf_clearance=az_AFJar2WXmpgRvHHscBCFFsz8Yl5Cl2SPLuHRYrqI-1788156331-1.2.1.1-wphFCb1.4VWwtxgiX2Z5Gk8wJMvVUDjykb0rrJUfuAbSu3GW4AFrfP95FhCQVjEkrAM1jKYZmKNBLNO6ypcUsLPYRXz34dEG_wz.2JaPl_gJFscczkksBfefywSAjyBUthq2q.3TQoDm7eNKnIzSKep5OiyB9abSvvv4WXBlie9imY1flRbZYL3ZxFPUpTCu.tWSqsg9WqY8XG5LhYrAqQoXK5ua4qr9179rkRVTIKroHpF.oKFRlfsP9Np8C56_sM0qOrYtouCY7IQ0c8.muzCgbS4ve78GIQ18mf80Z1YohBbsX4EWIc1u6CUAD3UV7NUxczOtcHSqqseOpGKZoEDVW3Bnl0rIbA5xBkPsYYA',
 }
 
+session = tls_client.Session(
+    client_identifier="chrome112",
+    random_tls_extension_order=True,
+)
 
-class thriftyuae:
-    def __init__(
-        self, status, startid, endid, inputtable, outputtable, offline, proxyid
-    ):
+
+class ThriftyUAE:
+    def __init__(self, status, startid, endid, inputtable, outputtable, offline, proxyid):
         self.inputtable = inputtable
         self.outputtable = outputtable
         self.startid = startid
         self.endid = endid
         self.proxyid = proxyid
+        self.websitecode = WEBSITE_CODE
+
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = WEBSITE_CODE
-        self.is_dc_input = False
+
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
-        """,
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
+            """,
             (str(self.websitecode), status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
 
+    # -- networking -----------------------------------------------------
     def load(self, source_url):
-        return session.get(source_url, cookies=COOKIES, headers=HEADERS, timeout=30)
+        return session.get(source_url, cookies=COOKIES, headers=HEADERS, timeout_seconds=30)
 
-    def insert(self, chunks):
-        if not chunks:
+    # -- db helpers -------------------------------------------------------
+    def insert(self, rows):
+        if not rows:
             print("No rows supplied for insert.")
             return
 
         print("INSERT INITIATED")
-        columns = [c for c in chunks[0].keys() if c != "id"]
+        columns = [c for c in rows[0].keys() if c != "id"]
         colnames = ",".join(columns)
-        values = [tuple(row.get(col) for col in columns) for row in chunks]
+        values = [tuple(row.get(col) for col in columns) for row in rows]
         sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES %s"
         with self.conn.cursor() as cursor:
             execute_values(cursor, sql, values, page_size=500)
         self.conn.commit()
-        print("INSERTED")
+        print(f"INSERTED {len(rows)} rows")
 
     def update(self, upstatus, refid):
-        updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
-        self._execute_commit(updateq, (upstatus, refid))
+        self._execute_commit(
+            f"UPDATE {self.inputtable} SET status=%s WHERE id=%s", (upstatus, refid)
+        )
         print(self.websitecode, "updated as", upstatus, "for id", refid)
 
     def conn_close(self):
@@ -131,70 +132,79 @@ class thriftyuae:
 
     def main(self, resultset):
         for result in resultset:
-            print(result)
             refid = result["id"]
             websitecode = result.get("websitecode") or self.websitecode
-            source_name = result.get("source_name", SOURCE_NAME)
+            source_name = result.get("source_name") or SOURCE_NAME
             source_url = result.get("source_url") or SOURCE_URL
             print("refid", refid, "source_url", source_url)
+
             try:
                 response = self.load(source_url)
                 print("status", response.status_code)
+
+                if DEBUG_DUMP_RESPONSE:
+                    with open("response.json", "w") as f:
+                        f.write(response.text)
+
                 if response.status_code != 200:
                     self.update(2, refid)
                     continue
 
-                try:
-                    response_data = response.json()
-                except Exception:
-                    raw_text = response.text
-                    cleaned = []
-                    in_string = False
-                    escaped = False
-
-                    for char in raw_text:
-                        if in_string:
-                            if escaped:
-                                cleaned.append(char)
-                                escaped = False
-                                continue
-                            if char == "\\":
-                                cleaned.append(char)
-                                escaped = True
-                                continue
-                            if char == '"':
-                                cleaned.append(char)
-                                in_string = False
-                                continue
-                            if char in "\n\r\t":
-                                cleaned.append(" ")
-                                continue
-                            cleaned.append(char)
-                            continue
-
-                        cleaned.append(char)
-                        if char == '"':
-                            in_string = True
-
-                    response_data = json.loads("".join(cleaned))
-
+                response_data = self._parse_json(response.text)
                 rows = self.extraction(response_data, refid, websitecode, source_name)
+
                 if rows:
                     self.insert(rows)
                     self.update(1, refid)
                 else:
                     self.update(2, refid)
+
             except Exception:
+                self.eHandling()
                 try:
                     self.conn.rollback()
                 except Exception:
                     pass
                 self.update(2, refid)
 
+    @staticmethod
+    def _parse_json(raw_text):
+        """Parse JSON, tolerating stray raw control characters inside strings."""
+        try:
+            return json.loads(raw_text)
+        except Exception:
+            cleaned = []
+            in_string = False
+            escaped = False
+            for char in raw_text:
+                if in_string:
+                    if escaped:
+                        cleaned.append(char)
+                        escaped = False
+                        continue
+                    if char == "\\":
+                        cleaned.append(char)
+                        escaped = True
+                        continue
+                    if char == '"':
+                        cleaned.append(char)
+                        in_string = False
+                        continue
+                    if char in "\n\r\t":
+                        cleaned.append(" ")
+                        continue
+                    cleaned.append(char)
+                    continue
+
+                cleaned.append(char)
+                if char == '"':
+                    in_string = True
+
+            return json.loads("".join(cleaned))
+
     def extraction(self, response_data, refid, websitecode, source_name):
         rows = []
         seen_codes = set()
-        source_name=58
 
         for state_name, state_data in response_data.items():
             branches = state_data.get("Branches", [])
@@ -211,20 +221,14 @@ class thriftyuae:
                     r"\s+", " ", str(branch.get("CountryCode") or "")
                 ).strip()
                 city = re.sub(
-                    r"\s+",
-                    " ",
-                    str(branch.get("StateName") or state_name or ""),
+                    r"\s+", " ", str(branch.get("StateName") or state_name or "")
                 ).strip()
                 region = re.sub(r"\s+", " ", str(state_name or "")).strip()
+
                 location_name = location_term
-                lowered_name = location_name.lower()
-                is_airport = "airport" in lowered_name
+                is_airport = "airport" in location_name.lower()
                 location_type = "airport" if is_airport else "city"
                 created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                websitecode = 58
-                source_name ="thriftyuae.com"
-                    
-               
 
                 rows.append(
                     {
@@ -250,37 +254,35 @@ class thriftyuae:
 
 if __name__ == "__main__":
     RETRY = 1
-    while RETRY < 20:
-        SC = None
+    MAX_RETRIES = 20
+
+    while RETRY < MAX_RETRIES:
+        scraper = None
         try:
-            SC = thriftyuae(0, 173, 173, "input_locations", "locations", False, "20")
-            # (
-            #     script,
-            #     status,
-            #     startid,
-            #     endid,
-            #     inputtable,
-            #     outputtable,
-            #     offline,
-            #     proxyid,
-            # ) = sys.argv
-            # SC = thriftyuae(
-            #     status,
-            #     startid,
-            #     endid,
-            #     inputtable,
-            #     outputtable,
-            #     offline,
-            #     proxyid,
-            # )
-        except Exception as e:
-            if SC:
-                SC.eHandling()
+            if len(sys.argv) == 8:
+                (
+                    _,
+                    status,
+                    startid,
+                    endid,
+                    inputtable,
+                    outputtable,
+                    offline,
+                    proxyid,
+                ) = sys.argv
+                scraper = ThriftyUAE(
+                    status, startid, endid, inputtable, outputtable, offline, proxyid
+                )
             else:
-                exc_type, exc_obj, tb = sys.exc_info()
-                print("Startup error:", repr(e) or repr(exc_obj))
+                scraper = ThriftyUAE(0, 267, 267, "input_locations", "locations", False, "60")
+        except Exception as e:
+            if scraper:
+                scraper.eHandling()
+            else:
+                print("Startup error:", repr(e))
         finally:
-            if SC:
-                SC.conn_close()
+            if scraper:
+                scraper.conn_close()
+
         time.sleep(3)
         RETRY += 1
