@@ -5,7 +5,6 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
-
 import psycopg2
 import requests
 from dotenv import load_dotenv
@@ -68,7 +67,7 @@ class thrifty_co_uk:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
             (str(self.websitecode), status, startid, endid),
         )
@@ -205,7 +204,7 @@ if __name__ == "__main__":
     while RETRY < 20:
         SC = None
         try:
-            SC = thrifty_co_uk(2, 172, 172, "input_locations", "locations", False, "20")
+            SC = thrifty_co_uk(0, 266, 266, "input_locations", "locations", False, "60")
             # (
             #     script,
             #     status,
