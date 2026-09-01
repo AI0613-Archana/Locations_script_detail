@@ -292,6 +292,7 @@ class avis_4:
                 "priority_level": "",
                 "location_term": location_term,
                 "location_name": location_name,
+                "booking_county":country,
             }
             rows.append(row)
 
