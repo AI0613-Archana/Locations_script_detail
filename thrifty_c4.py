@@ -30,8 +30,8 @@ DB_CONFIG = {
 BASE_URL = "https://www.thrifty.fr/api/geodata/search"
 
 COUNTRY_CONFIG = {
-    # "DE": ("thrifty.de", "ZT", "DE", "de"),
-    "FR": ("thrifty.fr", "ZT", "FR", "fr")
+    "DE": ("thrifty.de", "ZT", "DE", "de"),
+
 
 }
 
