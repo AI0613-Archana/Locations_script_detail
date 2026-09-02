@@ -27,7 +27,7 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
-BASE_URL = "https://www.thrifty.fr/api/geodata/search"
+BASE_URL = "https://www.thrifty.de/api/geodata/search"
 
 COUNTRY_CONFIG = {
     "DE": ("thrifty.de", "ZT", "DE", "de"),
