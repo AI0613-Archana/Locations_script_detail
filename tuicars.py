@@ -343,6 +343,8 @@ class tuicars:
                     "priority_level": "",
                     "location_term": location_name,
                     "location_name": location_name,
+                    "booking_country": country,
+
                 }
                 rows.append(row)
 

@@ -44,12 +44,13 @@ class travelsupermarket:
         self.proxyset = self.cursor.fetchall()
 
         self.cursor.execute(
-            f"""
-            SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
-        """,
-            (str(self.websitecode), status, startid, endid),
-        )
+                f"""
+                SELECT * FROM {self.inputtable}
+                WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
+                ORDER BY id
+                """,
+                (self.websitecode, status, startid, endid),
+            )
         resultset = self.cursor.fetchall()
         self.main(resultset)
 
@@ -321,6 +322,7 @@ class travelsupermarket:
                 "priority_level": "",
                 "location_term": "",
                 "location_name": name,
+                "booking_country": country,
             }
             rows.append(row)
 
@@ -328,7 +330,7 @@ class travelsupermarket:
 if __name__ == "__main__":
     SC = None
     try:
-        # SC = travelsupermarket(0, 150, 150, "input_locations", "locations", False, "20")
+        # SC = travelsupermarket(1, 150, 150, "input_locations", "locations", False, "60")
 
         (
             script,
