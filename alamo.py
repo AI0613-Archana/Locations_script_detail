@@ -5,8 +5,9 @@ import sys
 import threading
 import time
 from hashlib import sha256
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait, as_completed
 from datetime import datetime, timezone
+from queue import Queue
 
 import airportsdata
 try:
@@ -16,7 +17,8 @@ except ImportError:
 import psycopg2
 import requests
 from dotenv import load_dotenv
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_batch
+from psycopg2.pool import ThreadedConnectionPool
 
 load_dotenv()
 
@@ -34,8 +36,8 @@ COUNTRY_CONFIG = {
     # Keep exactly one country uncommented for each run.
     # After it finishes, comment it and uncomment the next country before rerunning.
     # "GB": {"countryCode": "GB", "cor": "GB", "locale": "en_GB", "domain": "enterprise.co.uk"},
-    "US": {"countryCode": "US", "cor": "US", "locale": "en_US", "domain": "enterprise.com"},
-    # "DE": {"countryCode": "DE", "cor": "DE", "locale": "de_DE", "domain": "enterprise.de"},
+    # "US": {"countryCode": "US", "cor": "US", "locale": "en_US", "domain": "enterprise.com"},
+    "DE": {"countryCode": "DE", "cor": "DE", "locale": "de_DE", "domain": "enterprise.de"},
     # "FR": {"countryCode": "FR", "cor": "FR", "locale": "fr_FR", "domain": "enterprise.fr"},
     # "ES": {"countryCode": "ES", "cor": "ES", "locale": "es_ES", "domain": "enterprise.es"},
     # "IT": {"countryCode": "IT", "cor": "IT", "locale": "it_IT", "domain": "enterprise.it"},
@@ -97,37 +99,45 @@ def resolve_city_location(city_name, country_code):
     return city_name
 
 
-def build_input_data(target_terms=None):
-    """Build one row per airport for the single enabled booking country."""
+def build_input_data(target_terms=None, city_id_from=None, city_id_to=None):
+    """Build one API-search row per airport record for the enabled country."""
     if len(COUNTRY_CONFIG) != 1:
         raise RuntimeError(
             "Enable exactly one country in COUNTRY_CONFIG before starting a run."
         )
 
-    import json
-    with open('/home/ai/Documents/Locations_script_detail_test/worldcities.json', 'r', encoding='utf-8') as f:
-        cities_db = json.load(f)
+    import airportsdata
+    airports = airportsdata.load("IATA")
 
     target_terms = {
         term.strip().upper() for term in (target_terms or []) if term.strip()
     }
+    processed_cities = set()
+    if os.path.exists("processed_iatas.txt"):
+        with open("processed_iatas.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                processed_cities.add(line.strip())
+
     rows = []
-    for v in cities_db:
-        city_name = v.get("city", "")
-        if not city_name:
+    for iata, data in airports.items():
+        city_name = data.get("city", "")
+        if not iata:
             continue
-        if target_terms and city_name.upper() not in target_terms:
+        if iata in processed_cities:
+            continue
+        if target_terms and iata.upper() not in target_terms:
             continue
         # Like Expedia, search every airport through the enabled booking country.
         for country, config in COUNTRY_CONFIG.items():
             rows.append({
-                "ss":             city_name,
+                "city_id":        iata,
+                "ss":             iata,
                 "domain":         config["domain"],
                 "bookingcountry": country,
                 "city":           city_name,
-                "airport_name":   "",
+                "airport_name":   data.get("name", ""),
             })
-    rows.sort(key=lambda r: (r["bookingcountry"], r["ss"]))
+    rows.sort(key=lambda r: (r["bookingcountry"], r["city_id"]))
     return rows
 
 
@@ -141,11 +151,11 @@ class alamo:
         self.startid     = startid
         self.endid       = endid
         self.proxyid     = proxyid
-        self.conn        = psycopg2.connect(**DB_CONFIG)
-        self.cursor      = self.conn.cursor(cursor_factory=RealDictCursor)
         self.websitecode = 6           # ← update to Enterprise's actual websitecode
         self.max_workers = max_workers
         self.target_terms = target_terms or []
+
+        self.db_pool = ThreadedConnectionPool(1, max_workers * 2, **DB_CONFIG)
 
         self.api_cache   = {}           # (ss, bookingcountry) → full typeahead response
         self.cache_lock  = threading.Lock()
@@ -153,33 +163,38 @@ class alamo:
         self.failure_lock = threading.Lock()
         self.seen_lock   = threading.Lock()
         self.rows_lock   = threading.Lock()
-        self.db_lock     = threading.Lock()
 
-        self.cursor.execute(
-            f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
-        )
-        self.proxyset = self.cursor.fetchall()
+        conn = self.db_pool.getconn()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
+                )
+                self.proxyset = cursor.fetchall()
+        
+                self.length_limits = self._get_length_limits(cursor)
+                self.known_location_keys = self._load_existing_location_keys(cursor)
+        
+                if str(status).strip().lower() == "any":
+                    cursor.execute(
+                        f"""
+                        SELECT * FROM {self.inputtable}
+                        WHERE websitecode = %s AND id BETWEEN %s AND %s
+                        """,
+                        (str(self.websitecode), startid, endid),
+                    )
+                else:
+                    cursor.execute(
+                        f"""
+                        SELECT * FROM {self.inputtable}
+                        WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
+                        """,
+                        (str(self.websitecode), status, startid, endid),
+                    )
+                resultset = cursor.fetchall()
+        finally:
+            self.db_pool.putconn(conn)
 
-        self.length_limits = self._get_length_limits(self.cursor)
-        self.known_location_keys = self._load_existing_location_keys()
-
-        if str(status).strip().lower() == "any":
-            self.cursor.execute(
-                f"""
-                SELECT * FROM {self.inputtable}
-                WHERE websitecode = %s AND id BETWEEN %s AND %s
-                """,
-                (str(self.websitecode), startid, endid),
-            )
-        else:
-            self.cursor.execute(
-                f"""
-                SELECT * FROM {self.inputtable}
-                WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
-                """,
-                (str(self.websitecode), status, startid, endid),
-            )
-        resultset = self.cursor.fetchall()
         self.main(resultset)
 
     # ── PROXY ─────────────────────────────────────────────────────────────────
@@ -228,11 +243,17 @@ class alamo:
         params = {
             "countryCode":    cfg["countryCode"],
             "includeExotics": "true",
-            "brand":          "ENTERPRISE",
+            "brand":          "ALAMO",
             "dto":            "true",
             "cor":            cfg["cor"],
             "locale":         cfg["locale"],
         }
+        # print("headers")
+        # print(self.make_headers(bookingcountry))
+        # print("params")
+        # print(params)
+        # print("BASE_URL")
+        # print(BASE_URL.format(ss=ss))
         return requests.get(
             BASE_URL.format(ss=ss),
             params=params,
@@ -240,6 +261,7 @@ class alamo:
             proxies=proxies,
             timeout=30,
         )
+        
 
     # ── DB ────────────────────────────────────────────────────────────────────
     def _get_length_limits(self, cursor):
@@ -257,21 +279,23 @@ class alamo:
             for row in cursor.fetchall()
         }
 
-    def _load_existing_location_keys(self):
+    def _load_existing_location_keys(self, cursor):
         """Load rows already stored for this website, so reruns do not duplicate them."""
-        self.cursor.execute(
+        booking_country = list(COUNTRY_CONFIG.keys())[0] if COUNTRY_CONFIG else ""
+        cursor.execute(
             f"""
             SELECT location_name, location_code
             FROM {self.outputtable}
             WHERE website_code = %s
+              AND booking_country = %s
               AND location_name IS NOT NULL
               AND location_code IS NOT NULL
             """,
-            (self.websitecode,),
+            (self.websitecode, booking_country),
         )
         keys = {
             (str(row["location_name"]), str(row["location_code"]))
-            for row in self.cursor.fetchall()
+            for row in cursor.fetchall()
             if row["location_name"] not in (None, "")
             and row["location_code"] not in (None, "")
         }
@@ -293,43 +317,44 @@ class alamo:
         with self.seen_lock:
             self.known_location_keys.discard(key)
 
-    def insert_one(self, row):
-        """Insert a completed location immediately while keeping DB access thread-safe."""
-        columns = [c for c in row if c != "id"]
+    def insert_many(self, rows_list):
+        """Insert multiple completed locations in a single batch query."""
+        if not rows_list:
+            return True
+            
+        columns = [c for c in rows_list[0] if c != "id"]
         colnames = ",".join(columns)
         placeholders = ",".join(["%s"] * len(columns))
         sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
 
-        value_row = []
-        for col in columns:
-            value = row.get(col)
-            max_len = self.length_limits.get(col)
-            if isinstance(value, str) and max_len and len(value) > max_len:
-                print(
-                    "Truncated", col, "from", len(value), "to", max_len,
-                    "for location_code", row.get("location_code"),
-                )
-                value = value[:max_len]
-            value_row.append(value)
+        values_list = []
+        for row in rows_list:
+            value_row = []
+            for col in columns:
+                value = row.get(col)
+                max_len = self.length_limits.get(col)
+                if isinstance(value, str) and max_len and len(value) > max_len:
+                    value = value[:max_len]
+                value_row.append(value)
+            values_list.append(tuple(value_row))
 
-        with self.db_lock:
-            try:
-                self.cursor.execute(sql, tuple(value_row))
-                self.conn.commit()
-                print(
-                    "INSERTED | pickup:", row.get("pickup_location"),
-                    "| type:", row.get("location_type"),
-                    "| code:", row.get("location_code"),
-                )
+        conn = self.db_pool.getconn()
+        try:
+            with conn.cursor() as cursor:
+                execute_batch(cursor, sql, values_list)
+                conn.commit()
+                print(f"BULK INSERTED {len(rows_list)} locations successfully.")
                 return True
+        except Exception:
+            try:
+                conn.rollback()
             except Exception:
-                try:
-                    self.conn.rollback()
-                except Exception:
-                    pass
-                print("INSERT FAILED for location_code", row.get("location_code"))
-                self.eHandling()
-                return False
+                pass
+            print(f"BULK INSERT FAILED for {len(rows_list)} locations")
+            self.eHandling()
+            return False
+        finally:
+            self.db_pool.putconn(conn)
 
     def update(self, upstatus, refid):
         updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
@@ -338,8 +363,7 @@ class alamo:
 
     def conn_close(self):
         try:
-            self.cursor.close()
-            self.conn.close()
+            self.db_pool.closeall()
         except Exception:
             pass
 
@@ -348,15 +372,19 @@ class alamo:
         traceback.print_exc()
 
     def _execute_commit(self, query, params=None):
+        conn = self.db_pool.getconn()
         try:
-            self.cursor.execute(query, params)
-            self.conn.commit()
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                conn.commit()
         except Exception:
             try:
-                self.conn.rollback()
+                conn.rollback()
             except Exception:
                 pass
             raise
+        finally:
+            self.db_pool.putconn(conn)
 
     # ── ENTERPRISE API HELPERS ───────────────────────────────────────────────
     def fetch_location_list(self, ss, bookingcountry, proxies):
@@ -461,6 +489,9 @@ class alamo:
         """Map one Alamo response item to the shared locations-table fields."""
         address = location.get("address") or {}
         additional_data = location.get("additional_data") or {}
+        gps = location.get("gps") or {}
+        latitude = self.get_first(gps, "latitude", "lat")
+        longitude = self.get_first(gps, "longitude", "lon", "long")
         location_name = self.get_first(
             location,
             "name",
@@ -481,6 +512,8 @@ class alamo:
             "location_country": str(location_country or ""),
             "is_airport": is_airport,
             "airport_code": str(airport_code),
+            "latitude": str(latitude),
+            "longitude": str(longitude),
         }
 
     def _build_row(
@@ -514,6 +547,8 @@ class alamo:
             "priority_level": "",
             "location_term": location_details["location_name"],
             "location_name": location_details["location_name"],
+            "latitude": location_details["latitude"],
+            "longitude": location_details["longitude"],
         }
 
     # ── EXTRACTION ────────────────────────────────────────────────────────────
@@ -522,12 +557,18 @@ class alamo:
         bookingcountry = item["bookingcountry"]
 
         proxies = self.get_proxy()
+        local_rows = []
 
         # Keep every airport, city, branch, truck, port, and rail station returned
         # for the IATA search; do not restrict results to the matching airport only.
         response_data = self.fetch_location_list(ss, bookingcountry, proxies)
+        # print(response_data)
         for location, default_type in self.iter_locations(response_data):
             location_details = self.build_location_details(location, default_type)
+            
+            if not location_details["is_airport"] or location_details.get("airport_code", "").upper() != ss.upper():
+                continue
+
             locationcode = location_details["location_code"]
             locationname = location_details["location_name"]
 
@@ -553,11 +594,11 @@ class alamo:
                 created_date,
             )
             # print(row)
-            if self.insert_one(row):
-                with self.rows_lock:
-                    rows.append(row)
-            else:
-                self.release_location_key(locationname, locationcode)
+            local_rows.append(row)
+            with self.rows_lock:
+                rows.append(row)
+                
+        return local_rows
 
     # ── MAIN ──────────────────────────────────────────────────────────────────
     def main(self, resultset):
@@ -576,18 +617,44 @@ class alamo:
             rows = []
             try:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                    futures = [
+                    futures = {
                         executor.submit(
                             self.extraction, item, refid, websitecode, source_name,
                             rows,
-                        )
+                        ): item
                         for item in input_data
-                    ]
+                    }
+                    
+                    batch_rows = []
+                    batch_city_ids = []
+                    
                     for future in as_completed(futures):
+                        item = futures[future]
                         try:
-                            future.result()
+                            result_rows = future.result()
+                            if result_rows:
+                                batch_rows.extend(result_rows)
+                            batch_city_ids.append(item["city_id"])
+                            
+                            if len(batch_city_ids) >= 50:
+                                if self.insert_many(batch_rows):
+                                    with open("processed_iatas.txt", "a", encoding="utf-8") as f:
+                                        for cid in batch_city_ids:
+                                            f.write(str(cid) + "\n")
+                                else:
+                                    print("Failed to bulk insert 50 cities.")
+                                
+                                batch_rows = []
+                                batch_city_ids = []
+                                
                         except Exception:
                             self.eHandling()
+                            
+                    if batch_city_ids:
+                        if self.insert_many(batch_rows):
+                            with open("processed_iatas.txt", "a", encoding="utf-8") as f:
+                                for cid in batch_city_ids:
+                                    f.write(str(cid) + "\n")
                 if rows:
                     self.update(1, refid)
                 else:
@@ -597,26 +664,26 @@ class alamo:
                 self.eHandling()
                 self.update(2, refid)
 
+    def print_failures(self):
         if self.failed_requests:
-            print("\nFAILED REQUESTS:")
-            for failure in self.failed_requests:
-                print(
-                    "-", failure["url"],
-                    "| IATA:", failure["iata"],
-                    "| country:", failure["bookingcountry"],
-                    "| error:", failure["error"],
-                )
-
+            print(f"\nSaving {len(self.failed_requests)} FAILED REQUESTS to failed_requests.log...")
+            with open("failed_requests.log", "a", encoding="utf-8") as f:
+                for failure in self.failed_requests:
+                    log_line = f"- {failure['url']} | IATA: {failure['iata']} | country: {failure['bookingcountry']} | error: {failure['error']}\n"
+                    f.write(log_line)
+                    print(log_line.strip())
+            # Clear the list so we don't write them twice if called multiple times
+            self.failed_requests = []
 
 # ── ENTRY POINT ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 170
-    ENDID = 170
+    STARTID = 171
+    ENDID = 171
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
-    MAX_WORKERS = 15
+    MAX_WORKERS = 10
 
     # Set to 1 to run only the IATA codes listed below, regardless of DB status.
     RUN_MISSING_ONLY = 0
@@ -640,26 +707,7 @@ if __name__ == "__main__":
             target_terms=target_terms,
         )
 
-        # (
-        #     script,
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # ) = sys.argv
-        # EC = alamo(
-        #     status,
-        #     startid,
-        #     endid,
-        #     inputtable,
-        #     outputtable,
-        #     offline,
-        #     proxyid,
-        # )
-    except Exception:
+    except BaseException as e:
         if EC:
             EC.eHandling()
         else:
@@ -667,5 +715,6 @@ if __name__ == "__main__":
             print("Startup error:", exc_obj)
     finally:
         if EC:
+            EC.print_failures()
             EC.conn_close()
     time.sleep(3)
