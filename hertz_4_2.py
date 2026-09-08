@@ -53,6 +53,8 @@ DIALECT_MAP = {
     "MU": "enMU",
     "NL": "nlNL",
     "NO": "noNO",
+    "PL": "plPL",
+    "PT": "enUS",
     "QA": "enGB",
     "RO": "roRO",
     "RS": "srRS",
@@ -503,8 +505,8 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 118
-    ENDID = 118
+    STARTID = 293
+    ENDID = 293
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
