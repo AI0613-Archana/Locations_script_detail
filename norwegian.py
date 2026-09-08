@@ -46,9 +46,9 @@ class norwegian:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
-            (str(self.websitecode), status, startid, endid),
+            (self.websitecode, status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -332,6 +332,7 @@ class norwegian:
                 "priority_level": "",
                 "location_term": "",
                 "location_name": display_name,
+                "booking_country":country,
             }
             rows.append(row)
 
@@ -339,7 +340,7 @@ class norwegian:
 if __name__ == "__main__":
     SC = None
     try:
-        # SC = norwegian(0, 148, 148, "input_locations", "locations", False, "20")
+        # SC = norwegian(0, 148, 148, "input_locations", "locations", False, "60")
 
         (
             script,

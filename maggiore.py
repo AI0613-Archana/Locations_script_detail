@@ -44,9 +44,9 @@ class maggiore:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
-            (str(self.websitecode), status, startid, endid),
+            (self.websitecode, status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -303,6 +303,7 @@ class maggiore:
                 "priority_level": "",
                 "location_term": location_label,
                 "location_name": location_label,
+                "booking_country":country,
             }
             rows.append(row)
 
@@ -310,7 +311,7 @@ class maggiore:
 if __name__ == "__main__":
     SC = None
     try:
-        # SC = maggiore(0, 147, 147, "input_locations", "locations", False, "20")
+        # SC = maggiore(0, 147, 147, "input_locations", "locations", False, "60")
 
         (
             script,
