@@ -32,7 +32,7 @@ class europcar_c2:
         self.proxyid = proxyid
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 30
+        self.websitecode = 28
         self.is_dc_input = False
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
@@ -42,9 +42,9 @@ class europcar_c2:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
-            (str(self.websitecode), status, startid, endid),
+            (self.websitecode, status, startid, endid),
         )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -110,25 +110,27 @@ class europcar_c2:
             raise
 
     def main(self, resultset):
+
         cookies = {
-            "CookieConsent": "{stamp:%27wF/EVh1REYLh0saXFAyuoRFrRASpTVn2JljafT57EdYug7wRR67cxA==%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2Cmethod:%27explicit%27%2Cver:1%2Cutc:1788852203729%2Cregion:%27in%27}",
-            "_gcl_au": "1.1.449267266.1788852204",
-            "_ga": "GA1.1.1565244333.1788852196",
-            "FPID": "FPID2.2.oPVh2QJpGJdkWtdAwGe9RLVW2stlbCAVA4Yk016O8qU%3D.1788852196",
-            "FPLC": "zVYf04KSv1tp3KzSFOxCQmnE1QBlGtU%2FS6k5qWR3tRVHTWG67MMXU58KmA5ycpAZRUwnxj2QecMAvvkPC%2FGAXIh7nq%2Fo7o8h5b%2FKWVJsXFBh2DH0CKcvM4VC3XVGqA%3D%3D",
-            "__kla_id": "eyJjaWQiOiJaakF6TVRnMU1ETXRaVGRrTUMwME5tUmpMV0ZsTW1RdFpEZGtaalU0WmpWbE9HTmkifQ==",
-            "_clck": "hh7o03%5E2%5Eg9a%5E0%5E2442",
-            "cuvid": "cf1773f845fb490fa737c067f4998663",
-            "_fbp": "fb.1.1788852207159.729531470482119794.AQYAAQIB",
-            "bm_sz": "CEE84DEBC088C680890CEB66701739A3~YAAQd6LfrcWgCUegAQAAq2ZggAH9DMd8XQz8oLB1DN0bMYLKGTx8sv73iIIw/g7Owrt4jUZtSdMAO2u8aSV8Cu0N0lWgv/LsrE9Jrt/Qamn/oofTw+VW1NUUL6lOceOLAtT58gFcHOpRL4eKdc6x9tx++qh2SHnRMdxjPxhO8NxgFTBhaY225g7nrlbLS71j/LmXeqeJ6eeyXyhlFTv8frVSg+69BVeupo3hiNioNKrL6iUdrl6cvgQmun9rlnF4ItVFdf5cE11XA8nFG9ZsIxK/bzTGQz7lRcWXqizC4YnFmjYnz1qsJFN0qiZClodh25BJ7B0wNkY5vEI5LghDyp48JpNyRynI11PTg7/XHEEim831wljw/d63yIf89mkAzPcsK3/c9OaKAwfQE3WGia7YhP2bER0twuKUxOW1H276IO032Yg=~4404033~4473906",
-            "_abck": "C14D3DCC691B5DAAA796A589ED998E5C~0~YAAQd6LfrXWiCUegAQAADmtggBBhdsBwFvhmZPtlV7II0Lp3p7FY0BZYAcn2LFq7fV/r7vVcp3TdgoSDOWPwEa9MSJfBjllRRQ+/SAwhVq91uXRl3K0hJr5O6jA7OvstvxkfEM28szoLqm4qo0dPvcE4Wj8OVFiaD0vo/u9dn4MgurHPLFMrGIQwwP+s7NqthZSo1Zf0F41SZ7zJem1EWwyaeVuxAhXu14uzWmBmk7MsQ5wG//HGwG+c3PkXqmbdspf3dneQ+PxDZkWPCf+sLFSEFMqm2zcp1vz/WIP3mqDRsdik51uNStdQBvw9ZrYR+3SMqzYt8ypZSwIRbXVQHRyosy8Fsh/4NLKEb2Ew2VymFzkY/tkH9tw8swjwXUu7QHG/DfgTSb7oMwdfwDqaUzucFlNnY8YhJU4fMVj2vRUIlI+pGmbrOJUEEsnkxKY2RwpjrcswqGzXVr7Rg9nywQGD73NRzyRgXsOAkpSidAX96xF1/gK52h5hTnLOfQEf24edAXkhJLq07iHw8XFS7pnR6tuHWiDfzsS0jta5Jm8p0+wEsOjAyP6K6g507sIkwbj8zPTGNnMLrStKEbWT3Bj4qNodMeuMwpuAGttrpkk0GHqPjfQSAPD8qgILQqxLw7m0FIPWWH64jayxvlEyzlUO6WkBuCRT3GDehhU/A8TjwWL+MEAsMr+f~-1~-1~-1~AAQAAAAG%2f%2f%2f%2f%2fyUyO85WiRBbNPx2%2fE4MjsYHIq+pu0nf5KomvZTxZCYLZs6Sky6tctBqEbmXvVC%2fGBZTrZVWt21agohzlSyqchEEeEqAvkGYMfgHqQTuX3gmChsW3EEkaw52VRJmm3w0oLHjjtI%3d~-1",
-            "viewport": "2xl",
-            "cusid": "1788860199221",
-            "cuvon": "1788860199237",
-            "ak_bmsc": "B44614FA4722469850F5F713A6B51F29~000000000000000000000000000000~YAAQd6LfrXykCUegAQAANXFggAELDXXLm8KLoy8RMQPWe5ChNlt4w3oAfWx+AW6bM9kCzmwj1eSPnpea0QvGbmeZMfsbg8wmo0ekYVP2zDajKB+QWZX+wV/OpMf5G+Buwa0wnpnvT+xlToNKLC1hBBcZ1fGsRWddYnSq7gOT3pVxVFzzuc5CgQHdbFCiq8oWvfrIIAh7e3Edko/n+jEjOD7P0SyNeuG2RC2LnPvzHu1GIV3pkWGrngRwnNnGBA9BsEe3vIAHtSaEmp1Mjc7OHUIedxf08kZLVz2dnxTyRr9YzjsX4YmVYlwO3lQPoYe8wFW9ZnNo8wZn4IIKTERBCpNuScRYw0PEfE4waNvLYPzfkrQTCbo2tdc0vGxwUmriTL2b78rbujBVYrgtwTG4NJo8vIETwMAEmO6ldf0JhAOUoLIpxg/Ayt1nG4tE7g+dWtwgJ/MabnhVHL9H65W4TmiAWotaoPI=",
-            "_ga_L6CSQBC4D3": "GS2.1.s1788860199$o3$g0$t1788860199$j60$l0$h1821639521",
-            "FPGSID": "1.1788860200.1788860200.G-L6CSQBC4D3.JjA5eRixQ7DivQ11f9jPGA",
-            "_clsk": "zvcey2%5E1788860202082%5E1%5E1%5Eb.clarity.ms%2Fcollect",
+            'bm_sz': '948BDAED132AEA5D38D681279416F673~YAAQhaLfrWyhYnygAQAAjr+YgAGPXvdhXs8WBX79erxXABoXIS84K+VhBCEkjms+NHMzUpKVBtdlvx6L0xvJTCRWY3yr6WR/WCWn4fVoKUTmIOlsQn6Js+clNItrIOMnD4viVahI7sFWHgQxN3LbiiyV2Xx15/MPEcg23KRqgok9BjzQE2guDM0bupUoIlVDKdW02zJuNOhkXd84vp9ztQ0P+1GIbgcAq5J9vGe9TBJssBkdl+57kBPPoYfeOCFrLV0bVWVZtg8Te6f1QfpuvekKNI91UPGGY2KFhSx68aVgyru05c8cy8BV1sjguIHPcQB5G2VBfnmu3F5xQXws/HVYoE1oFpqhC0/BCZcpyMAQRKEuhnMkmu13a5nVbIjABRrU9NtxQmDY9nM5mvEf4+fPVrh7/oowjU5t~4272438~3225411',
+            'bm_sv': 'F2C99350372FD9788270D4B1A926F2AE~YAAQhaLfrUikYnygAQAAeMmYgAGysIUktW5fV5xceYIXdGsUkuVtgoQ7NxtXTKQ7Shbypj1+qGYTiHRjAehnpxQCXxVIqbM3hdecip0u19J1DoUSEhXN/KXg/TSne/FDhn4qJb1pgidVpJcanPCuwtjPzEG01kL25Rn2K2V8lg4E3bGWttBpH3YIrsI8JbRReviol56z4aIYGmx7IvZHp8jL+J1nwOsb/Z1GT5KJu6VlCFpzCCW0PtFHmuGJFgv8xg==~1',
+            'ak_bmsc': 'D82DC82B04647E0A5DB679C0226360F4~000000000000000000000000000000~YAAQhaLfrZqkYnygAQAAMMuYgAFFI9zsXASJwcGl+RDOzkDvc2JRyxuIN4t5rvE/K16Nl62RHZoPbiRtN+srbkQ5EOpeijrWZuPlbCFJmNWF5G2Lqh1laoDmfx0MOmDVLW2OocqRpooYoXeopWLebzhq/sPc0EwGaRMCiBSsLOVFJnqA3Ehq5GWmcbzE/Sdlm1JmG+F6y07xAZDCaQ+MEioLv6ZbFnBqywh4dA+GnixXU/2g+X0Dk/0MPOJuVE4NKD6m/5DTQuX+hZmkfdEPgxgWKZK9GpihuLKVrm6n8sGX3fN9DJtV1pMXTYcPk/JWfoQsq93XacNptWT0PKCK6bbRJOz1DcthG8K5o5dehBjHu0rFF4GdGRm7b/143Q4EJSLwlHFz+pWee6ELGY6VaZNgaZKZc1qPOP5aTR9mJyf1FgDWDmftS1XDBwdO7HVmdD55xViyWTeANqlLExxPXF/3XmKgM+A=',
+            'CookieConsent': '{stamp:%27U7ftMlg2hVDGDqot+rJcCAgLKDH0WZ4Urm9msrwdVK9dYffubPvOig==%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2Cmethod:%27explicit%27%2Cver:1%2Cutc:1788863892757%2Cregion:%27in%27}',
+            '_abck': 'BBEEBAE393FCF6251FBD3A2851489757~0~YAAQhaLfrVKlYnygAQAARc6YgBAbRKfJDPst0VwUtJwevL23KfiJe0Y72Oq9ZPHkuY5J5ue6zq7XXJslYoK71lKMYMYFgPFCW8HIxjSl07VdJXWp64FeL4o9My8DRojiJHfSNUbBdY+bAXfO5R+Ar+aFFxBrCK732Ay59dcRLZpT0tkW2qB+Gekce+YYOu7UL3B4mpDnid9XL1Zo3/JOXzE4lC64n56vEtsjRmlhCWfunZigfP+Iej6YQMmfciDai7yBfUy+gcK2x61w5SB40QsSsVl7h7cB/j/faInQrBgFbvGsQSA3Qmu6Q8vd67Q7nwcnU4URVMaygfdHo/cIAaWq5fs46y6ttkr3AQq+7LrbUku0PTFmEt5OgqZ9/Q53+md7W49fCyqyjCsLQclmigwVHpZELzHEDLrxj+tcm27kAVaRH9cLB+hphPtrMBB2msvR8LKlRXz29UrZby1D1XDFEbF4uvTMzfmSzkqiJMmNGL8o/0bTpJt2PUxnjrUh5vk27ZDxTWi6KlTcs6M8gO4fypL5bVzeAHthqubzhCl1NJvBVgHBL7QpDg0voUyVQCRKtgjCEYP/OG/KWLEg1EyEBJSg2eY6ifpRKCJt7cog+GPFLJ3xWfSpbcGOvYx+dkLyW/7+l/Khjbdh5GP0zw==~-1~-1~-1~AAQAAAAG%2f%2f%2f%2f%2f5nII9vTiXfRd5IabHaRut85LoMqlE51RKayljDdVp19tOOfdTUDJsbhxebmMEvLwattml9fpUfsl41XwSbzRN9P3Vm+CY5LZDo2~-1',
+            '_ga_L6CSQBC4D3': 'GS2.1.s1788863893$o1$g0$t1788863893$j60$l0$h902591252',
+            '_ga': 'GA1.1.1856958871.1788863893',
+            '_gcl_au': '1.1.698558766.1788863893',
+            'FPID': 'FPID2.2.XuyZXxpVQnBo46s2V3FoaApndTtZKjkEWHCHv4qZZX8%3D.1788863893',
+            'FPLC': '6cmjjDi4BYSR8Ei4%2B%2BcUJ%2BfMYPHiqrSxCVK85q9VDN1n3dUuEVEmKiLecC7TaaV%2Bb4arsIPuF01udtL4dvgHqc5iMTaaoDe1T3xHziNxejjMhwhGRIM8weN3LS1s5w%3D%3D',
+            'FPGSID': '1.1788863894.1788863894.G-L6CSQBC4D3.uIMfEdN0zZ0dNJ9VFXRsaA',
+            '__kla_id': 'eyJjaWQiOiJPRE5rTlRSbE9HUXRPV1E0WVMwME56RXdMVGsxWXpNdE4yVmhOVFl6WlRobE4yRTEifQ==',
+            '_clck': '1mhl381%5E2%5Eg9a%5E0%5E2442',
+            'cusid': '1788863895160',
+            'cusid': '1788863895160',
+            'cuvid': 'c8e4f0f60305414f83c6594efb69c273',
+            '_clsk': '73vnve%5E1788863896085%5E1%5E1%5Ep.clarity.ms%2Fcollect',
+            '_fbp': 'fb.1.1788863894944.82957882433276904.AQYAAQIB',
+            'cuvon': '1788863896601',
         }
         headers = {
             "accept": "application/json",
@@ -152,7 +154,7 @@ class europcar_c2:
             source_name = result["source_name"]
             country = result.get("country", "")
             
-            for input_id in range(1, 101):
+            for input_id in [28, 64]:
                 params = {
                     "bookType": "ECBOOK",
                     "id": str(input_id),
@@ -217,25 +219,27 @@ if __name__ == "__main__":
     while RETRY < 20:
         SC = None
         try:
-            (
-                script,
-                status,
-                startid,
-                endid,
-                inputtable,
-                outputtable,
-                offline,
-                proxyid,
-            ) = sys.argv
-            SC = europcar_c2(
-                status,
-                startid,
-                endid,
-                inputtable,
-                outputtable,
-                offline,
-                proxyid,
-            )
+            SC = europcar_c2(0, 10, 10, "input_locations", "locations", False, "60")
+
+            # (
+            #     script,
+            #     status,
+            #     startid,
+            #     endid,
+            #     inputtable,
+            #     outputtable,
+            #     offline,
+            #     proxyid,
+            # ) = sys.argv
+            # SC = europcar_c2(
+            #     status,
+            #     startid,
+            #     endid,
+            #     inputtable,
+            #     outputtable,
+            #     offline,
+            #     proxyid,
+            # )
         except Exception:
             if SC:
                 SC.eHandling()
