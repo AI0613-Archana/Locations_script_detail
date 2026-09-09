@@ -39,6 +39,7 @@ COUNTRY_CONFIG = {
     "US": {"countryCode": "US", "cor": "US", "locale": "en_US", "domain": "enterprise.com"},
     # "DE": {"countryCode": "DE", "cor": "DE", "locale": "de_DE", "domain": "enterprise.de"},
     # "FR": {"countryCode": "FR", "cor": "FR", "locale": "fr_FR", "domain": "enterprise.fr"},
+    # "CA": {"countryCode": "CA", "cor": "CA", "locale": "en_US", "domain": "enterprise.ca"},
     # "ES": {"countryCode": "ES", "cor": "ES", "locale": "es_ES", "domain": "enterprise.es"},
     # "IT": {"countryCode": "IT", "cor": "IT", "locale": "it_IT", "domain": "enterprise.it"},
     # "DK": {"countryCode": "DK", "cor": "DK", "locale": "da_DK", "domain": "enterprise.dk"},
@@ -99,7 +100,7 @@ def resolve_city_location(city_name, country_code):
     return city_name
 
 
-def build_input_data(target_terms=None, city_id_from=None, city_id_to=None):
+def build_input_data(target_terms=None, city_id_from=None, city_id_to=None, websitecode=None):
     """Build one API-search row per airport record for the enabled country."""
     if len(COUNTRY_CONFIG) != 1:
         raise RuntimeError(
@@ -113,8 +114,10 @@ def build_input_data(target_terms=None, city_id_from=None, city_id_to=None):
         term.strip().upper() for term in (target_terms or []) if term.strip()
     }
     processed_cities = set()
-    if os.path.exists("processed_iatas.txt"):
-        with open("processed_iatas.txt", "r", encoding="utf-8") as f:
+    active_country = list(COUNTRY_CONFIG.keys())[0]
+    filename = f"processed_iatas_{websitecode}_{active_country}.txt"
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as f:
             for line in f:
                 processed_cities.add(line.strip())
 
@@ -151,7 +154,7 @@ class enterprise_c1:
         self.startid     = startid
         self.endid       = endid
         self.proxyid     = proxyid
-        self.websitecode = 27           # ← update websitecode
+        self.websitecode = 27           # ← update to Enterprise's actual websitecode
         self.max_workers = max_workers
         self.target_terms = target_terms or []
 
@@ -248,7 +251,6 @@ class enterprise_c1:
             "cor":            cfg["cor"],
             "locale":         cfg["locale"],
         }
-
         # print("headers")
         # print(self.make_headers(bookingcountry))
         # print("params")
@@ -603,7 +605,7 @@ class enterprise_c1:
 
     # ── MAIN ──────────────────────────────────────────────────────────────────
     def main(self, resultset):
-        input_data = build_input_data(self.target_terms)
+        input_data = build_input_data(self.target_terms, websitecode=self.websitecode)
         if self.target_terms:
             print(
                 "Target retry terms:",
@@ -639,7 +641,8 @@ class enterprise_c1:
                             
                             if len(batch_city_ids) >= 50:
                                 if self.insert_many(batch_rows):
-                                    with open("processed_iatas.txt", "a", encoding="utf-8") as f:
+                                    active_country = list(COUNTRY_CONFIG.keys())[0]
+                                    with open(f"processed_iatas_{self.websitecode}_{active_country}.txt", "a", encoding="utf-8") as f:
                                         for cid in batch_city_ids:
                                             f.write(str(cid) + "\n")
                                 else:
@@ -653,7 +656,8 @@ class enterprise_c1:
                             
                     if batch_city_ids:
                         if self.insert_many(batch_rows):
-                            with open("processed_iatas.txt", "a", encoding="utf-8") as f:
+                            active_country = list(COUNTRY_CONFIG.keys())[0]
+                            with open(f"processed_iatas_{self.websitecode}_{active_country}.txt", "a", encoding="utf-8") as f:
                                 for cid in batch_city_ids:
                                     f.write(str(cid) + "\n")
                 if rows:
@@ -667,8 +671,10 @@ class enterprise_c1:
 
     def print_failures(self):
         if self.failed_requests:
-            print(f"\nSaving {len(self.failed_requests)} FAILED REQUESTS to failed_requests.log...")
-            with open("failed_requests.log", "a", encoding="utf-8") as f:
+            active_country = list(COUNTRY_CONFIG.keys())[0]
+            filename = f"failed_requests_{self.websitecode}_{active_country}.log"
+            print(f"\nSaving {len(self.failed_requests)} FAILED REQUESTS to {filename}...")
+            with open(filename, "a", encoding="utf-8") as f:
                 for failure in self.failed_requests:
                     log_line = f"- {failure['url']} | IATA: {failure['iata']} | country: {failure['bookingcountry']} | error: {failure['error']}\n"
                     f.write(log_line)
@@ -684,7 +690,7 @@ if __name__ == "__main__":
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
-    MAX_WORKERS = 10
+    MAX_WORKERS = 7
 
     # Set to 1 to run only the IATA codes listed below, regardless of DB status.
     RUN_MISSING_ONLY = 0
