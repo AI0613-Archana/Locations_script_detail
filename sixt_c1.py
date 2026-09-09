@@ -4,21 +4,17 @@ import random
 import sys
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import airportsdata
 
-try:
-    import geonamescache
-except ImportError:
-    geonamescache = None
 import psycopg2
 from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
 load_dotenv()
-
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "port": int(os.getenv("DB_PORT", 6438)),
@@ -29,50 +25,54 @@ DB_CONFIG = {
 
 
 BASE_URL = "https://web-api.orange.sixt.com/v1/locations"
+SELECT_LOCATION_URL = (
+    "https://grpc-prod.orange.sixt.com/"
+    "com.sixt.service.rent_booking.api.SearchService/SelectLocation"
+)
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    # "AE": ("sixt.ae",     "AE"),
+    # "AE": ("sixt.ae", "AE"),
     # "AU": ("sixt.com.au", "AU"),
-    # "BE": ("sixt.be",     "BE"),
-    # "BH": ("sixt.com",    "BH"),
+    # "BE": ("sixt.be", "BE"),
+    # "BH": ("sixt.com", "BH"),
     # "BR": ("sixt.com.br", "BR"),
-    # "CA": ("sixt.ca",     "CA"),
-    # "CH": ("sixt.ch",     "CH"),
+    # "CA": ("sixt.ca", "CA"),
+    # "CH": ("sixt.ch", "CH"),
     # "CN": ("sixt.com.cn", "CN"),
-    # "DE": ("sixt.de",     "DE"),
-    # "DK": ("sixt.dk",     "DK"),
-    # "EE": ("sixt.ee",     "EE"),
-    # "EG": ("sixt.com",    "EG"),
-    # "ES": ("sixt.es",     "ES"),
-    # "FI": ("sixt.fi",     "FI"),
-    # "FR": ("sixt.fr",     "FR"),
-    # "GB": ("sixt.co.uk",  "GB"),
-    # "GE": ("sixt.com",    "GE"),
-    # "HR": ("sixt.hr",     "HR"),
-    # "HU": ("sixt.hu",     "HU"),
-    # "IT": ("sixt.it",     "IT"),
-    # "JP": ("sixt.jp",     "JP"),
-    # "KW": ("sixt.com",    "KW"),
-    # "LB": ("sixt.com",    "LB"),
-    # "LT": ("sixt.lt",     "LT"),
-    # "LV": ("sixt.lv",     "LV"),
-    # "MT": ("sixt.com",    "MT"),
-    # "MX": ("sixt.mx",     "MX"),
-    # "NL": ("sixt.nl",     "NL"),
-    # "NO": ("sixt.no",     "NO"),
-    # "PL": ("sixt.pl",     "PL"),
-    # "PT": ("sixt.pt",     "PT"),
-    # "QA": ("sixt.com",    "QA"),
-    # "RO": ("sixt.ro",     "RO"),
-    # "RS": ("sixt.rs",     "RS"),
-    # "SA": ("sixt.com",    "SA"),
-    # "SE": ("sixt.se",     "SE"),
+    # "DE": ("sixt.de", "DE"),
+    # "DK": ("sixt.dk", "DK"),
+    # "EE": ("sixt.ee", "EE"),
+    # "EG": ("sixt.com", "EG"),
+    # "ES": ("sixt.es", "ES"),
+    # "FI": ("sixt.fi", "FI"),
+    # "FR": ("sixt.fr", "FR"),
+    # "GB": ("sixt.co.uk", "GB"),
+    # "GE": ("sixt.com", "GE"),
+    # "HR": ("sixt.hr", "HR"),
+    # "HU": ("sixt.hu", "HU"),
+    # "IT": ("sixt.it", "IT"),
+    # "JP": ("sixt.jp", "JP"),
+    # "KW": ("sixt.com", "KW"),
+    # "LB": ("sixt.com", "LB"),
+    # "LT": ("sixt.lt", "LT"),
+    # "LV": ("sixt.lv", "LV"),
+    # "MT": ("sixt.com", "MT"),
+    # "MX": ("sixt.mx", "MX"),
+    # "NL": ("sixt.nl", "NL"),
+    # "NO": ("sixt.no", "NO"),
+    # "PL": ("sixt.pl", "PL"),
+    # "PT": ("sixt.pt", "PT"),
+    # "QA": ("sixt.com", "QA"),
+    # "RO": ("sixt.ro", "RO"),
+    # "RS": ("sixt.rs", "RS"),
+    # "SA": ("sixt.com", "SA"),
+    # "SE": ("sixt.se", "SE"),
     # "SG": ("sixt.com.sg", "SG"),
-    # "SI": ("sixt.si",     "SI"),
-    # "SK": ("sixt.sk",     "SK"),
+    # "SI": ("sixt.si", "SI"),
+    # "SK": ("sixt.sk", "SK"),
     # "TR": ("sixt.com.tr", "TR"),
-    # "UA": ("sixt.ua",     "UA"),
+    # "UA": ("sixt.ua", "UA"),
     "US": ("sixt.com", "US"),
 }
 
@@ -122,50 +122,6 @@ LOCALE_MAP = {
 }
 
 
-_GC = geonamescache.GeonamesCache() if geonamescache else None
-_COUNTRIES = _GC.get_countries() if _GC else {}
-_CITY_INDEX = {}
-
-if _GC:
-    for city in _GC.get_cities().values():
-        key = (
-            city.get("name", "").strip().lower(),
-            city.get("countrycode", "").strip().upper(),
-        )
-        if not key[0] or not key[1]:
-            continue
-        current = _CITY_INDEX.get(key)
-        if current is None or int(city.get("population") or 0) > int(
-            current.get("population") or 0
-        ):
-            _CITY_INDEX[key] = city
-
-
-def resolve_city_location(city_name, country_code):
-    city_name = (city_name or "").strip()
-    country_code = (country_code or "").strip().upper()
-    if not city_name:
-        return ""
-
-    if _GC:
-        match = _CITY_INDEX.get((city_name.lower(), country_code))
-        if match is None:
-            for (name, _country), city in _CITY_INDEX.items():
-                if name == city_name.lower():
-                    match = city
-                    break
-
-        if match:
-            country_name = _COUNTRIES.get(match.get("countrycode", ""), {}).get(
-                "name", ""
-            )
-            if country_name:
-                return f"{match.get('name', city_name)}, {country_name}"
-            return match.get("name", city_name)
-
-    return city_name
-
-
 def build_input_data(target_terms=None):
     """Build (ss, domain, bookingcountry, city, airport_name) rows from airportsdata."""
     airports_db = airportsdata.load("IATA")
@@ -179,15 +135,7 @@ def build_input_data(target_terms=None):
         if target_terms and iata.upper() not in target_terms:
             continue
 
-        # country = v["country"]
-        # if country not in COUNTRY_CONFIG:
-        #     continue
-
-        # domain, bookingcountry = COUNTRY_CONFIG[country]
-
         for country, (domain, bookingcountry) in COUNTRY_CONFIG.items():
-
-
             rows.append(
                 {
                     "ss": iata,
@@ -303,6 +251,102 @@ class sixt:
             timeout=30,
         )
 
+    def make_select_headers(self, bookingcountry):
+        domain = COUNTRY_CONFIG[bookingcountry][0]
+        locale = LOCALE_MAP.get(bookingcountry, "en-GB,en;q=0.9")
+        return {
+            "accept": "*/*",
+            "accept-language": locale,
+            "content-type": "application/json",
+            "origin": f"https://www.{domain}",
+            "referer": f"https://www.{domain}/",
+            "sec-ch-ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Linux"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "sx-platform": "web-next",
+            "user-agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+            ),
+            "x-client-id": "web-browser-250118664537361520005373651200192024",
+            "x-client-type": "web",
+            "x-correlation-id": str(uuid.uuid4()),
+            "x-sx-e-stable-id": str(uuid.uuid4()),
+            "x-sx-tenant": "6",
+        }
+
+    def fetch_select_location(self, locationcode, bookingcountry, proxies):
+        """Call SelectLocation and return country_code from response."""
+        headers = self.make_select_headers(bookingcountry)
+        payload = {
+            "user_profile_id": "",
+            "location_purpose": 1,
+            "vehicle_type": 1,
+            "auto_complete_session_id": str(uuid.uuid4()),
+            "location_id": f"BRANCH:{locationcode}",
+            "include_fastlane": None,
+            "sim_card_country_code": None,
+        }
+
+        attempts = (proxies, {})
+        errors = []
+        for attempt, current_proxies in enumerate(attempts, start=1):
+            try:
+                resp = requests.post(
+                    SELECT_LOCATION_URL,
+                    headers=headers,
+                    json=payload,
+                    proxies=current_proxies,
+                    timeout=30,
+                )
+                print(
+                    "SelectLocation Status:",
+                    resp.status_code,
+                    "| BRANCH:",
+                    locationcode,
+                    "| country:",
+                    bookingcountry,
+                    "| attempt:",
+                    attempt,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                selected = data.get("selected_location") or {}
+                country_code = (
+                    selected.get("country_code")
+                    or (selected.get("branch") or {}).get("country_code")
+                    or ""
+                )
+                time.sleep(0.2)
+                return (country_code or "").strip().upper()
+            except Exception as exc:
+                errors.append(f"attempt {attempt}: {exc}")
+                if attempt == 1:
+                    print(
+                        "SelectLocation failed; retrying without proxy:",
+                        locationcode,
+                    )
+
+        with self.failure_lock:
+            self.failed_requests.append(
+                {
+                    "term": f"BRANCH:{locationcode}",
+                    "bookingcountry": bookingcountry,
+                    "url": SELECT_LOCATION_URL,
+                    "error": " | ".join(errors),
+                }
+            )
+        print(
+            "SelectLocation all attempts failed for BRANCH:",
+            locationcode,
+            "|",
+            " | ".join(errors),
+        )
+        return ""
+
     # -- DB ---------------------------------------------------------------------
     def _get_length_limits(self, cursor):
         cursor.execute(
@@ -356,6 +400,10 @@ class sixt:
                     row.get("location_type"),
                     "| code:",
                     row.get("location_code"),
+                    "| location_country:",
+                    row.get("location_country"),
+                    "| booking_country:",
+                    row.get("booking_country"),
                 )
                 return True
             except Exception:
@@ -484,11 +532,11 @@ class sixt:
         websitecode,
         source_name,
         ss,
-        bookingcountry,
+        location_country,
+        booking_country,
         locationcode,
         is_airport,
         loctype,
-        city_location,
         region,
         term,
         location_name,
@@ -499,12 +547,12 @@ class sixt:
             "source_name": source_name,
             "website_code": websitecode,
             "pickup_location": ss,
-            "location_country": bookingcountry,
+            "location_country": location_country,
+            "booking_country": booking_country,
             "location_code": locationcode,
             "is_airport": is_airport,
             "created_date": created_date,
             "location_type": loctype,
-            "city": city_location,
             "region": region,
             "priority_level": "",
             "location_term": term,
@@ -519,7 +567,6 @@ class sixt:
         bookingcountry = item["bookingcountry"]
         city = item["city"]
         airport_name = item["airport_name"]
-        city_location = resolve_city_location(city, bookingcountry)
         proxies = self.get_proxy()
 
         # Attempt 1: IATA code
@@ -533,6 +580,14 @@ class sixt:
 
         if not locationcode:
             return
+
+        # Resolve real location country from SelectLocation API
+        location_country = self.fetch_select_location(
+            locationcode, bookingcountry, proxies
+        )
+        # Fallback: if SelectLocation fails, keep bookingcountry so insert still works
+        if not location_country:
+            location_country = bookingcountry
 
         seen_key = (bookingcountry, locationcode)
         with self.seen_lock:
@@ -549,11 +604,11 @@ class sixt:
             websitecode,
             source_name,
             ss,
-            bookingcountry,
+            location_country,  # from SelectLocation country_code
+            bookingcountry,  # from COUNTRY_CONFIG
             locationcode,
             is_airport,
             loctype,
-            city_location,
             "",
             locationterm or "",
             locationterm or airport_name,
@@ -632,14 +687,13 @@ if __name__ == "__main__":
     ENDID = 239
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
-    PROXYID = "59"
-    MAX_WORKERS = 7
+    PROXYID = "60"
+    MAX_WORKERS = 5
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
     RUN_MISSING_ONLY = 0
     MISSING_IATA_TERMS = []
-  
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
     if RUN_MISSING_ONLY:
