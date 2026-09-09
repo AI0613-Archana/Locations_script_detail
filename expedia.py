@@ -39,7 +39,7 @@ COUNTRY_CONFIG = {
     # "SE": ("expedia.se",     "SE"),
     # "MX": ("expedia.mx",     "MX"),
     # "FI": ("expedia.fi",     "FI"),
-    # "FR": ("expedia.fr",     "FR"),
+    "FR": ("expedia.fr",     "FR"),
     # "AU": ("expedia.com.au", "AU"),
     # "IE": ("expedia.ie",     "IE"),
     # "NO": ("expedia.no", "NO"),
@@ -47,7 +47,7 @@ COUNTRY_CONFIG = {
     # "NL": ("expedia.nl", "NL"),
     # "AT": ("expedia.at",     "AT"),
     # "GB": ("expedia.co.uk",     "GB"),
-    "BR": ("expedia.com.br", "BR"),
+    # "BR": ("expedia.com.br", "BR"),
     # "CH": ("expedia.ch",     "CH"),
     # "CA": ("expedia.ca",     "CA"),
     # "DE": ("expedia.de",     "DE"),
@@ -65,7 +65,7 @@ LOCALE_MAP = {
     # "SE": "sv-SE,sv;q=0.9",
     # "MX": "es-MX,es;q=0.9",
     # "FI": "fi-FI,fi;q=0.9",
-    # "FR": "fr-FR,fr;q=0.9",
+    "FR": "fr-FR,fr;q=0.9",
     # "AU": "en-AU,en;q=0.9",
     # "IE": "en-IE,en;q=0.9",
     # "NO": "nb-NO,nb;q=0.9",
@@ -73,7 +73,7 @@ LOCALE_MAP = {
     # "NL": "nl-NL,nl;q=0.9",
     # "AT": "de-AT,de;q=0.9",
     # "GB": "en-GB,en;q=0.9",
-    "BR": "pt-BR,pt;q=0.9",
+    # "BR": "pt-BR,pt;q=0.9",
     # "CH": "de-CH,de;q=0.9",
     # "CA": "en-CA,en;q=0.9",
     # "DE": "de-DE,de;q=0.9",
@@ -152,6 +152,7 @@ def build_input_data(target_terms=None):
                     "bookingcountry": bookingcountry,
                     "city": v["city"],
                     "airport_name": v["name"],
+                    "airport_country": v.get("country", ""),
                 }
             )
 
@@ -203,17 +204,17 @@ class expedia:
             self.cursor.execute(
                 f"""
                 SELECT * FROM {self.inputtable}
-                WHERE websitecode = %s::text AND id BETWEEN %s AND %s
+                WHERE websitecode = %s AND id BETWEEN %s AND %s
                 """,
-                (str(self.websitecode), startid, endid),
+                (self.websitecode, startid, endid),
             )
         else:
             self.cursor.execute(
                 f"""
                 SELECT * FROM {self.inputtable}
-                WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+                WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
                 """,
-                (str(self.websitecode), status, startid, endid),
+                (self.websitecode, status, startid, endid),
             )
         resultset = self.cursor.fetchall()
         self.main(resultset)
@@ -428,6 +429,7 @@ class expedia:
         source_name,
         ss,
         bookingcountry,
+        location_country,
         locationcode,
         is_airport,
         loctype,
@@ -442,7 +444,7 @@ class expedia:
             "source_name": source_name,
             "website_code": websitecode,
             "pickup_location": ss,
-            "location_country": bookingcountry,
+            "location_country": location_country,
             "location_code": locationcode,
             "is_airport": is_airport,
             "created_date": created_date,
@@ -452,6 +454,7 @@ class expedia:
             "priority_level": "",
             "location_term": term,
             "location_name": location_name,
+            "booking_country": bookingcountry,
         }
 
     def extraction(
@@ -462,9 +465,13 @@ class expedia:
         bookingcountry = item["bookingcountry"]
         city = item["city"]
         airport_name = item["airport_name"]
+        airport_country = item.get("airport_country", "")
         city_location = resolve_city_location(city, bookingcountry)
         proxies = self.get_proxy()
-        url = f"https://{domain}/api/v4/typeahead/{ss}"
+        
+        locale_str = LOCALE_MAP.get(bookingcountry, "en-US,en;q=0.9")
+        locale_param = locale_str.split(",")[0].replace("-", "_")
+        url = f"https://{domain}/api/v4/typeahead/{ss}?locale={locale_param}"
 
         location_list = self.fetch_location_list(ss, bookingcountry, proxies, url)
 
@@ -472,18 +479,27 @@ class expedia:
 
         for i in location_list.get("sr", []):
             loctype = i.get("type")
+            if not loctype or str(loctype).upper() != "AIRPORT":
+                continue
+
             region_names = i.get("regionNames") or {}
             term = region_names.get("fullName", "")
             region = region_names.get("shortName", "")
             ess_id = i.get("essId") or {}
             locationcode = str(ess_id.get("sourceId", ""))
+            
+            hierarchy_info = i.get("hierarchyInfo") or {}
+            country_info = hierarchy_info.get("country") or {}
+            location_country = country_info.get("isoCode2") or airport_country or bookingcountry
 
             if not locationcode:
                 continue
 
             term_text = str(term or "")
             airport_text = str(airport_name or "")
-            if ss not in term_text and airport_text.lower() not in term_text.lower():
+            
+            api_airport_code = hierarchy_info.get("airport", {}).get("airportCode", "")
+            if ss != api_airport_code and ss not in term_text and airport_text.lower() not in term_text.lower():
                 continue
 
             row = self._build_row(
@@ -492,6 +508,7 @@ class expedia:
                 source_name,
                 ss,
                 bookingcountry,
+                location_country,
                 locationcode,
                 True,
                 loctype,
@@ -501,6 +518,7 @@ class expedia:
                 airport_name or term_text,
                 created_date,
             )
+            print("ROW:",row)
             seen_key = (bookingcountry, row["location_code"])
             with self.seen_lock:
                 if seen_key in seen_location_codes:
@@ -575,8 +593,8 @@ class expedia:
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 199
-    ENDID = 199
+    STARTID = 206
+    ENDID = 206
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "99"
@@ -586,63 +604,7 @@ if __name__ == "__main__":
     # 1 = retry only the failed/missing IATA codes below.
     RUN_MISSING_ONLY = 0
     MISSING_IATA_TERMS = [
-        "AUR",
-        "AUS",
-        "AUT",
-        "AUU",
-        "AUW",
-        "AUX",
-        "AUY",
-        "AUZ",
-        "AVA",
-        "AVB",
-        "AVG",
-        "AVI",
-        "AVK",
-        "AVL",
-        "AVN",
-        "AVO",
-        "AVP",
-        "AVU",
-        "AVV",
-        "AVW",
-        "AVX",
-        "AWB",
-        "AWA",
-        "AWD",
-        "AWK",
-        "AWM",
-        "AWN",
-        "AWP",
-        "AWZ",
-        "AXA",
-        "AXC",
-        "AXB",
-        "AXD",
-        "AXE",
-        "AXF",
-        "AXG",
-        "AXK",
-        "AXJ",
-        "AXL",
-        "AXM",
-        "AXN",
-        "AXP",
-        "AXR",
-        "AXS",
-        "AXT",
-        "AXU",
-        "AXV",
-        "AXX",
-        "AYG",
-        "AYJ",
-        "AYL",
-        "AYM",
-        "AYN",
-        "AYO",
-        "AYP",
-        "AYQ",
-        "AYR",
+        "ATL"
     ]
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
@@ -673,3 +635,4 @@ if __name__ == "__main__":
         if SC:
             SC.conn_close()
     time.sleep(3)
+
