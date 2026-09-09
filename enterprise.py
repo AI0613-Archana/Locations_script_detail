@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from queue import Queue
 
 import airportsdata
+
 try:
     import geonamescache
 except ImportError:
@@ -36,7 +37,12 @@ COUNTRY_CONFIG = {
     # Keep exactly one country uncommented for each run.
     # After it finishes, comment it and uncomment the next country before rerunning.
     # "GB": {"countryCode": "GB", "cor": "GB", "locale": "en_GB", "domain": "enterprise.co.uk"},
-    "US": {"countryCode": "US", "cor": "US", "locale": "en_US", "domain": "enterprise.com"},
+    "US": {
+        "countryCode": "US",
+        "cor": "US",
+        "locale": "en_US",
+        "domain": "enterprise.com",
+    },
     # "DE": {"countryCode": "DE", "cor": "DE", "locale": "de_DE", "domain": "enterprise.de"},
     # "FR": {"countryCode": "FR", "cor": "FR", "locale": "fr_FR", "domain": "enterprise.fr"},
     # "CA": {"countryCode": "CA", "cor": "CA", "locale": "en_US", "domain": "enterprise.ca"},
@@ -100,7 +106,9 @@ def resolve_city_location(city_name, country_code):
     return city_name
 
 
-def build_input_data(target_terms=None, city_id_from=None, city_id_to=None, websitecode=None):
+def build_input_data(
+    target_terms=None, city_id_from=None, city_id_to=None, websitecode=None
+):
     """Build one API-search row per airport record for the enabled country."""
     if len(COUNTRY_CONFIG) != 1:
         raise RuntimeError(
@@ -108,6 +116,7 @@ def build_input_data(target_terms=None, city_id_from=None, city_id_to=None, webs
         )
 
     import airportsdata
+
     airports = airportsdata.load("IATA")
 
     target_terms = {
@@ -132,40 +141,50 @@ def build_input_data(target_terms=None, city_id_from=None, city_id_to=None, webs
             continue
         # Like Expedia, search every airport through the enabled booking country.
         for country, config in COUNTRY_CONFIG.items():
-            rows.append({
-                "city_id":        iata,
-                "ss":             iata,
-                "domain":         config["domain"],
-                "bookingcountry": country,
-                "city":           city_name,
-                "airport_name":   data.get("name", ""),
-            })
+            rows.append(
+                {
+                    "city_id": iata,
+                    "ss": iata,
+                    "domain": config["domain"],
+                    "bookingcountry": country,
+                    "city": city_name,
+                    "airport_name": data.get("name", ""),
+                }
+            )
     rows.sort(key=lambda r: (r["bookingcountry"], r["city_id"]))
     return rows
 
 
 class enterprise_c1:
     def __init__(
-        self, status, startid, endid, inputtable, outputtable, offline, proxyid,
-        max_workers=10, target_terms=None,
+        self,
+        status,
+        startid,
+        endid,
+        inputtable,
+        outputtable,
+        offline,
+        proxyid,
+        max_workers=10,
+        target_terms=None,
     ):
-        self.inputtable  = inputtable
+        self.inputtable = inputtable
         self.outputtable = outputtable
-        self.startid     = startid
-        self.endid       = endid
-        self.proxyid     = proxyid
-        self.websitecode = 27           # ← update to Enterprise's actual websitecode
+        self.startid = startid
+        self.endid = endid
+        self.proxyid = proxyid
+        self.websitecode = 27  # ← update to Enterprise's actual websitecode
         self.max_workers = max_workers
         self.target_terms = target_terms or []
 
         self.db_pool = ThreadedConnectionPool(1, max_workers * 2, **DB_CONFIG)
 
-        self.api_cache   = {}           # (ss, bookingcountry) → full typeahead response
-        self.cache_lock  = threading.Lock()
+        self.api_cache = {}  # (ss, bookingcountry) → full typeahead response
+        self.cache_lock = threading.Lock()
         self.failed_requests = []
         self.failure_lock = threading.Lock()
-        self.seen_lock   = threading.Lock()
-        self.rows_lock   = threading.Lock()
+        self.seen_lock = threading.Lock()
+        self.rows_lock = threading.Lock()
 
         conn = self.db_pool.getconn()
         try:
@@ -174,10 +193,10 @@ class enterprise_c1:
                     f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
                 )
                 self.proxyset = cursor.fetchall()
-        
+
                 self.length_limits = self._get_length_limits(cursor)
                 self.known_location_keys = self._load_existing_location_keys(cursor)
-        
+
                 if str(status).strip().lower() == "any":
                     cursor.execute(
                         f"""
@@ -223,33 +242,33 @@ class enterprise_c1:
         )
 
     def make_headers(self, bookingcountry):
-        cfg    = COUNTRY_CONFIG[bookingcountry]
+        cfg = COUNTRY_CONFIG[bookingcountry]
         domain = cfg["domain"]
         locale = cfg["locale"].replace("_", "-")
         chrome_major = random.randint(120, 141)
         return {
-            "accept":             "application/json, text/plain, */*",
-            "accept-language":    f"{locale},{locale.split('-')[0]};q=0.9",
-            "origin":             f"https://www.{domain}",
-            "referer":            f"https://www.{domain}/",
-            "sec-ch-ua":          f'"Chromium";v="{chrome_major}", "Not=A?Brand";v="24", "Google Chrome";v="{chrome_major}"',
-            "sec-ch-ua-mobile":   "?0",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": f"{locale},{locale.split('-')[0]};q=0.9",
+            "origin": f"https://www.{domain}",
+            "referer": f"https://www.{domain}/",
+            "sec-ch-ua": f'"Chromium";v="{chrome_major}", "Not=A?Brand";v="24", "Google Chrome";v="{chrome_major}"',
+            "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Linux"',
-            "sec-fetch-dest":     "empty",
-            "sec-fetch-mode":     "cors",
-            "sec-fetch-site":     "same-site",
-            "user-agent":         self.RandUA(chrome_major),
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "user-agent": self.RandUA(chrome_major),
         }
 
     def load(self, ss, bookingcountry, proxies):
         cfg = COUNTRY_CONFIG[bookingcountry]
         params = {
-            "countryCode":    cfg["countryCode"],
+            "countryCode": cfg["countryCode"],
             "includeExotics": "true",
-            "brand":          "ENTERPRISE",
-            "dto":            "true",
-            "cor":            cfg["cor"],
-            "locale":         cfg["locale"],
+            "brand": "ENTERPRISE",
+            "dto": "true",
+            "cor": cfg["cor"],
+            "locale": cfg["locale"],
         }
         # print("headers")
         # print(self.make_headers(bookingcountry))
@@ -264,7 +283,6 @@ class enterprise_c1:
             proxies=proxies,
             timeout=30,
         )
-        
 
     # ── DB ────────────────────────────────────────────────────────────────────
     def _get_length_limits(self, cursor):
@@ -324,7 +342,7 @@ class enterprise_c1:
         """Insert multiple completed locations in a single batch query."""
         if not rows_list:
             return True
-            
+
         columns = [c for c in rows_list[0] if c != "id"]
         colnames = ",".join(columns)
         placeholders = ",".join(["%s"] * len(columns))
@@ -372,6 +390,7 @@ class enterprise_c1:
 
     def eHandling(self):
         import traceback
+
         traceback.print_exc()
 
     def _execute_commit(self, query, params=None):
@@ -407,10 +426,14 @@ class enterprise_c1:
             try:
                 resp = self.load(ss, bookingcountry, current_proxies)
                 print(
-                    "Status:", resp.status_code,
-                    "| Input_location:", ss,
-                    "| country:", bookingcountry,
-                    "| attempt:", attempt,
+                    "Status:",
+                    resp.status_code,
+                    "| Input_location:",
+                    ss,
+                    "| country:",
+                    bookingcountry,
+                    "| attempt:",
+                    attempt,
                 )
                 resp.raise_for_status()
                 result = resp.json()
@@ -500,12 +523,20 @@ class enterprise_c1:
             "name",
             default=self.get_first(additional_data, "long_name", "short_name"),
         )
-        location_type = self.get_first(location, "location_type", "type", default=default_type)
-        city = self.get_first(address, "city", default=self.get_first(additional_data, "short_name"))
-        region = self.get_first(address, "country_subdivision_code", "country_subdivision_name")
+        location_type = self.get_first(
+            location, "location_type", "type", default=default_type
+        )
+        city = self.get_first(
+            address, "city", default=self.get_first(additional_data, "short_name")
+        )
+        region = self.get_first(
+            address, "country_subdivision_code", "country_subdivision_name"
+        )
         location_country = address.get("country_code", "")
         is_airport = default_type == "Airport" or bool(location.get("airport_code"))
-        airport_code = location.get("airport_code") or self.make_location_code(location, default_type)
+        airport_code = location.get("airport_code") or self.make_location_code(
+            location, default_type
+        )
         return {
             "location_code": self.make_location_code(location, default_type),
             "location_name": str(location_name or ""),
@@ -530,7 +561,9 @@ class enterprise_c1:
         created_date,
     ):
         if location_details["is_airport"]:
-            pickup_location = location_details.get("airport_code", location_details["location_code"])
+            pickup_location = location_details.get(
+                "airport_code", location_details["location_code"]
+            )
         else:
             pickup_location = location_details["location_name"]
 
@@ -556,7 +589,7 @@ class enterprise_c1:
 
     # ── EXTRACTION ────────────────────────────────────────────────────────────
     def extraction(self, item, refid, websitecode, source_name, rows):
-        ss             = item["ss"]
+        ss = item["ss"]
         bookingcountry = item["bookingcountry"]
 
         proxies = self.get_proxy()
@@ -568,8 +601,11 @@ class enterprise_c1:
         # print(response_data)
         for location, default_type in self.iter_locations(response_data):
             location_details = self.build_location_details(location, default_type)
-            
-            if not location_details["is_airport"] or location_details.get("airport_code", "").upper() != ss.upper():
+
+            if (
+                not location_details["is_airport"]
+                or location_details.get("airport_code", "").upper() != ss.upper()
+            ):
                 continue
 
             locationcode = location_details["location_code"]
@@ -577,9 +613,12 @@ class enterprise_c1:
 
             if not self.reserve_location_key(locationname, locationcode):
                 print(
-                    "DUPLICATE SKIPPED | IATA:", ss,
-                    "| country:", bookingcountry,
-                    "| code:", locationcode,
+                    "DUPLICATE SKIPPED | IATA:",
+                    ss,
+                    "| country:",
+                    bookingcountry,
+                    "| code:",
+                    locationcode,
                 )
                 # A pre-existing row is a successful result for this input record.
                 with self.rows_lock:
@@ -600,7 +639,7 @@ class enterprise_c1:
             local_rows.append(row)
             with self.rows_lock:
                 rows.append(row)
-                
+
         return local_rows
 
     # ── MAIN ──────────────────────────────────────────────────────────────────
@@ -613,7 +652,7 @@ class enterprise_c1:
             )
 
         for result in resultset:
-            refid       = result["id"]
+            refid = result["id"]
             websitecode = result["websitecode"]
             source_name = result["source_name"]
 
@@ -622,15 +661,19 @@ class enterprise_c1:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = {
                         executor.submit(
-                            self.extraction, item, refid, websitecode, source_name,
+                            self.extraction,
+                            item,
+                            refid,
+                            websitecode,
+                            source_name,
                             rows,
                         ): item
                         for item in input_data
                     }
-                    
+
                     batch_rows = []
                     batch_city_ids = []
-                    
+
                     for future in as_completed(futures):
                         item = futures[future]
                         try:
@@ -638,26 +681,34 @@ class enterprise_c1:
                             if result_rows:
                                 batch_rows.extend(result_rows)
                             batch_city_ids.append(item["city_id"])
-                            
+
                             if len(batch_city_ids) >= 50:
                                 if self.insert_many(batch_rows):
                                     active_country = list(COUNTRY_CONFIG.keys())[0]
-                                    with open(f"processed_iatas_{self.websitecode}_{active_country}.txt", "a", encoding="utf-8") as f:
+                                    with open(
+                                        f"processed_iatas_{self.websitecode}_{active_country}.txt",
+                                        "a",
+                                        encoding="utf-8",
+                                    ) as f:
                                         for cid in batch_city_ids:
                                             f.write(str(cid) + "\n")
                                 else:
                                     print("Failed to bulk insert 50 cities.")
-                                
+
                                 batch_rows = []
                                 batch_city_ids = []
-                                
+
                         except Exception:
                             self.eHandling()
-                            
+
                     if batch_city_ids:
                         if self.insert_many(batch_rows):
                             active_country = list(COUNTRY_CONFIG.keys())[0]
-                            with open(f"processed_iatas_{self.websitecode}_{active_country}.txt", "a", encoding="utf-8") as f:
+                            with open(
+                                f"processed_iatas_{self.websitecode}_{active_country}.txt",
+                                "a",
+                                encoding="utf-8",
+                            ) as f:
                                 for cid in batch_city_ids:
                                     f.write(str(cid) + "\n")
                 if rows:
@@ -673,7 +724,9 @@ class enterprise_c1:
         if self.failed_requests:
             active_country = list(COUNTRY_CONFIG.keys())[0]
             filename = f"failed_requests_{self.websitecode}_{active_country}.log"
-            print(f"\nSaving {len(self.failed_requests)} FAILED REQUESTS to {filename}...")
+            print(
+                f"\nSaving {len(self.failed_requests)} FAILED REQUESTS to {filename}..."
+            )
             with open(filename, "a", encoding="utf-8") as f:
                 for failure in self.failed_requests:
                     log_line = f"- {failure['url']} | IATA: {failure['iata']} | country: {failure['bookingcountry']} | error: {failure['error']}\n"
@@ -681,6 +734,7 @@ class enterprise_c1:
                     print(log_line.strip())
             # Clear the list so we don't write them twice if called multiple times
             self.failed_requests = []
+
 
 # ── ENTRY POINT ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
