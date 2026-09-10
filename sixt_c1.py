@@ -44,7 +44,8 @@ BASE_URL = "https://web-api.orange.sixt.com/v1/locations"
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    # "AE": ("sixt.ae",     "AE"),
+    "AE": ("sixt.ae",     "AE"),
+    # "AT": ("sixt.at",     "AT"),
     # "AU": ("sixt.com.au", "AU"),
     # "BE": ("sixt.be",     "BE"),
     # "BH": ("sixt.com",    "BH"),
@@ -53,7 +54,7 @@ COUNTRY_CONFIG = {
     # "CH": ("sixt.ch",     "CH"),
     # "CN": ("sixt.com.cn", "CN"),
     # "DE": ("sixt.de",     "DE"),
-    "DK": ("sixt.dk",     "DK"),
+    # "DK": ("sixt.dk",     "DK"),
     # "EE": ("sixt.ee",     "EE"),
     # "EG": ("sixt.com",    "EG"),
     # "ES": ("sixt.es",     "ES"),
@@ -89,7 +90,7 @@ COUNTRY_CONFIG = {
 }
 
 LOCALE_MAP = {
-    # "AE": "ar-AE,ar",
+    "AE": "ar-AE,ar",
     # "AT": "de-AT,de",
     # "AU": "en-AU,en",
     # "BE": "nl-BE,nl",
@@ -98,7 +99,7 @@ LOCALE_MAP = {
     # "CN": "zh-CN,zh",
     # "CZ": "cs-CZ,cs",
     # "DE": "de-DE,de",
-    "DK": "da-DK,da",
+    # "DK": "da-DK,da",
     # "ES": "es-ES,es",
     # "FR": "fr-FR,fr",
     # "GB": "en-GB,en",
@@ -587,13 +588,13 @@ class sixt:
 
 
 if __name__ == "__main__":
-    STATUS = "1"
-    STARTID = 236
-    ENDID = 236
+    STATUS = "0"
+    STARTID = 241
+    ENDID = 241
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
-    PROXYID = "60"
-    MAX_WORKERS = 7
+    PROXYID = "59"
+    MAX_WORKERS = 6
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
