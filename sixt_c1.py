@@ -4,7 +4,6 @@ import random
 import sys
 import threading
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import airportsdata
@@ -12,7 +11,7 @@ import airportsdata
 import psycopg2
 from curl_cffi import requests
 from dotenv import load_dotenv
-from psycopg2.extras import RealDictCursor, execute_batch
+from psycopg2.extras import RealDictCursor
 
 load_dotenv()
 DB_CONFIG = {
@@ -23,107 +22,84 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
 }
 
-
 BASE_URL = "https://web-api.orange.sixt.com/v1/locations"
-SELECT_LOCATION_URL = (
-    "https://grpc-prod.orange.sixt.com/"
-    "com.sixt.service.rent_booking.api.SearchService/SelectLocation"
-)
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    "AE": ("sixt.ae", "AE"),
-    "AU": ("sixt.com.au", "AU"),
-    "BE": ("sixt.be", "BE"),
-    "BH": ("sixt.com", "BH"),
-    "BR": ("sixt.com.br", "BR"),
-    "CA": ("sixt.ca", "CA"),
-    "CH": ("sixt.ch", "CH"),
+    # "AE": ("sixt.ae",     "AE"),
+    # "AU": ("sixt.com.au", "AU"),
+    # "BE": ("sixt.be",     "BE"),
+    # "BH": ("sixt.com",    "BH"),
+    # "BR": ("sixt.com.br", "BR"),
+    # "CA": ("sixt.ca",     "CA"),
+    # "CH": ("sixt.ch",     "CH"),
     "CN": ("sixt.com.cn", "CN"),
-    "DE": ("sixt.de", "DE"),
-    "DK": ("sixt.dk", "DK"),
-    "EE": ("sixt.ee", "EE"),
-    "EG": ("sixt.com", "EG"),
-    "ES": ("sixt.es", "ES"),
-    "FI": ("sixt.fi", "FI"),
-    "FR": ("sixt.fr", "FR"),
-    "GB": ("sixt.co.uk", "GB"),
-    "GE": ("sixt.com", "GE"),
-    "HR": ("sixt.hr", "HR"),
-    "HU": ("sixt.hu", "HU"),
-    "IT": ("sixt.it", "IT"),
-    "JP": ("sixt.jp", "JP"),
-    "KW": ("sixt.com", "KW"),
-    "LB": ("sixt.com", "LB"),
-    "LT": ("sixt.lt", "LT"),
-    "LV": ("sixt.lv", "LV"),
-    "MT": ("sixt.com", "MT"),
-    "MX": ("sixt.mx", "MX"),
-    "NL": ("sixt.nl", "NL"),
-    "NO": ("sixt.no", "NO"),
-    "PL": ("sixt.pl", "PL"),
-    "PT": ("sixt.pt", "PT"),
-    "QA": ("sixt.com", "QA"),
-    "RO": ("sixt.ro", "RO"),
-    "RS": ("sixt.rs", "RS"),
-    "SA": ("sixt.com", "SA"),
-    "SE": ("sixt.se", "SE"),
-    "SG": ("sixt.com.sg", "SG"),
-    "SI": ("sixt.si", "SI"),
-    "SK": ("sixt.sk", "SK"),
-    "TR": ("sixt.com.tr", "TR"),
-    "UA": ("sixt.ua", "UA"),
-    "US": ("sixt.com", "US"),
+    # "DE": ("sixt.de",     "DE"),
+    # "DK": ("sixt.dk",     "DK"),
+    # "EE": ("sixt.ee",     "EE"),
+    # "EG": ("sixt.com",    "EG"),
+    # "ES": ("sixt.es",     "ES"),
+    # "FI": ("sixt.fi",     "FI"),
+    # "FR": ("sixt.fr",     "FR"),
+    # "GB": ("sixt.co.uk",  "GB"),
+    # "GE": ("sixt.com",    "GE"),
+    # "HR": ("sixt.hr",     "HR"),
+    # "HU": ("sixt.hu",     "HU"),
+    # "IT": ("sixt.it",     "IT"),
+    # "JP": ("sixt.jp",     "JP"),
+    # "KW": ("sixt.com",    "KW"),
+    # "LB": ("sixt.com",    "LB"),
+    # "LT": ("sixt.lt",     "LT"),
+    # "LV": ("sixt.lv",     "LV"),
+    # "MT": ("sixt.com",    "MT"),
+    # "MX": ("sixt.mx",     "MX"),
+    # "NL": ("sixt.nl",     "NL"),
+    # "NO": ("sixt.no",     "NO"),
+    # "PL": ("sixt.pl",     "PL"),
+    # "PT": ("sixt.pt",     "PT"),
+    # "QA": ("sixt.com",    "QA"),
+    # "RO": ("sixt.ro",     "RO"),
+    # "RS": ("sixt.rs",     "RS"),
+    # "SA": ("sixt.com",    "SA"),
+    # "SE": ("sixt.se",     "SE"),
+    # "SG": ("sixt.com.sg", "SG"),
+    # "SI": ("sixt.si",     "SI"),
+    # "SK": ("sixt.sk",     "SK"),
+    # "TR": ("sixt.com.tr", "TR"),
+    # "UA": ("sixt.ua",     "UA"),
+    # "US": ("sixt.com", "US"),
 }
 
 LOCALE_MAP = {
-    "AE": "en-US,en;q=0.9",
-    "AU": "en-AU,en;q=0.9",
-    "BE": "nl-BE,nl;q=0.9",
-    "BH": "en-US,en;q=0.9",
-    "BR": "pt-BR,pt;q=0.9",
-    "CA": "en-CA,en;q=0.9",
-    "CH": "de-CH,de;q=0.9",
-    "CN": "zh-CN,zh;q=0.9",
-    "DE": "de-DE,de;q=0.9",
-    "DK": "da-DK,da;q=0.9",
-    "EE": "et-EE,et;q=0.9",
-    "EG": "en-US,en;q=0.9",
-    "ES": "es-ES,es;q=0.9",
-    "FI": "fi-FI,fi;q=0.9",
-    "FR": "fr-FR,fr;q=0.9",
-    "GB": "en-GB,en;q=0.9",
-    "GE": "en-US,en;q=0.9",
-    "HR": "hr-HR,hr;q=0.9",
-    "HU": "hu-HU,hu;q=0.9",
-    "IT": "it-IT,it;q=0.9",
-    "JP": "ja-JP,ja;q=0.9",
-    "KW": "en-US,en;q=0.9",
-    "LB": "en-US,en;q=0.9",
-    "LT": "lt-LT,lt;q=0.9",
-    "LV": "lv-LV,lv;q=0.9",
-    "MT": "en-US,en;q=0.9",
-    "MX": "es-MX,es;q=0.9",
-    "NL": "nl-NL,nl;q=0.9",
-    "NO": "no-NO,no;q=0.9",
-    "PL": "pl-PL,pl;q=0.9",
-    "PT": "pt-PT,pt;q=0.9",
-    "QA": "en-US,en;q=0.9",
-    "RO": "ro-RO,ro;q=0.9",
-    "RS": "en-US,en;q=0.9",
-    "SA": "en-US,en;q=0.9",
-    "SE": "sv-SE,sv;q=0.9",
-    "SG": "en-SG,en;q=0.9",
-    "SI": "sl-SI,sl;q=0.9",
-    "SK": "sk-SK,sk;q=0.9",
-    "TR": "tr-TR,tr;q=0.9",
-    "UA": "uk-UA,uk;q=0.9",
-    "US": "en-US,en;q=0.9",
+    # "AE": "ar-AE,ar",
+    # "AT": "de-AT,de",
+    # "AU": "en-AU,en",
+    # "BE": "nl-BE,nl",
+    # "CA": "en-CA,en",  # confirmed from live capture
+    # "CH": "de-CH,de",
+    "CN": "zh-CN,zh",
+    # "CZ": "cs-CZ,cs",
+    # "DE": "de-DE,de",
+    # "DK": "da-DK,da",
+    # "ES": "es-ES,es",
+    # "FR": "fr-FR,fr",
+    # "GB": "en-GB,en",
+    # "IT": "it-IT,it",
+    # "LU": "fr-LU,fr",
+    # "NO": "nb-NO,no-NO,nb,no,en",  # confirmed from live capture — NO is the outlier
+    # "PL": "pl-PL,pl",
+    # "PT": "pt-PT,pt",
+    # "SE": "sv-SE,sv",
+    # "US": "en-US,en",
 }
 
 
-def build_input_data(target_terms=None, target_country=None):
-    """Build (ss, domain, bookingcountry, city, airport_name) rows from airportsdata."""
+def build_input_data(target_terms=None):
+    """Build (ss, domain, bookingcountry, airport_name, country) rows from
+    airportsdata only. City has been intentionally dropped — we only need the
+    airport (IATA) code plus the airport's own ISO2 country (used for
+    location_country).
+    """
     airports_db = airportsdata.load("IATA")
     target_terms = {
         term.strip().upper() for term in (target_terms or []) if term.strip()
@@ -136,15 +112,13 @@ def build_input_data(target_terms=None, target_country=None):
             continue
 
         for country, (domain, bookingcountry) in COUNTRY_CONFIG.items():
-            if target_country and target_country.upper() != country.upper():
-                continue
             rows.append(
                 {
                     "ss": iata,
                     "domain": domain,
                     "bookingcountry": bookingcountry,
-                    "city": v["city"],
                     "airport_name": v["name"],
+                    "country": v["country"],  # airport's own ISO2 country code
                 }
             )
 
@@ -184,9 +158,6 @@ class sixt:
         self.seen_lock = threading.Lock()
         self.rows_lock = threading.Lock()
         self.db_lock = threading.Lock()
-
-        self.insert_buffer = []
-        self.batch_limit = 50
 
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
@@ -256,102 +227,6 @@ class sixt:
             timeout=30,
         )
 
-    def make_select_headers(self, bookingcountry):
-        domain = COUNTRY_CONFIG[bookingcountry][0]
-        locale = LOCALE_MAP.get(bookingcountry, "en-GB,en;q=0.9")
-        return {
-            "accept": "*/*",
-            "accept-language": locale,
-            "content-type": "application/json",
-            "origin": f"https://www.{domain}",
-            "referer": f"https://www.{domain}/",
-            "sec-ch-ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Linux"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-site",
-            "sx-platform": "web-next",
-            "user-agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-            ),
-            "x-client-id": "web-browser-250118664537361520005373651200192024",
-            "x-client-type": "web",
-            "x-correlation-id": str(uuid.uuid4()),
-            "x-sx-e-stable-id": str(uuid.uuid4()),
-            "x-sx-tenant": "6",
-        }
-
-    def fetch_select_location(self, locationcode, bookingcountry, proxies):
-        """Call SelectLocation and return country_code from response."""
-        headers = self.make_select_headers(bookingcountry)
-        payload = {
-            "user_profile_id": "",
-            "location_purpose": 1,
-            "vehicle_type": 1,
-            "auto_complete_session_id": str(uuid.uuid4()),
-            "location_id": f"BRANCH:{locationcode}",
-            "include_fastlane": None,
-            "sim_card_country_code": None,
-        }
-
-        attempts = (proxies, {})
-        errors = []
-        for attempt, current_proxies in enumerate(attempts, start=1):
-            try:
-                resp = requests.post(
-                    SELECT_LOCATION_URL,
-                    headers=headers,
-                    json=payload,
-                    proxies=current_proxies,
-                    timeout=30,
-                )
-                print(
-                    "SelectLocation Status:",
-                    resp.status_code,
-                    "| BRANCH:",
-                    locationcode,
-                    "| country:",
-                    bookingcountry,
-                    "| attempt:",
-                    attempt,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                selected = data.get("selected_location") or {}
-                country_code = (
-                    selected.get("country_code")
-                    or (selected.get("branch") or {}).get("country_code")
-                    or ""
-                )
-                time.sleep(0.2)
-                return (country_code or "").strip().upper()
-            except Exception as exc:
-                errors.append(f"attempt {attempt}: {exc}")
-                if attempt == 1:
-                    print(
-                        "SelectLocation failed; retrying without proxy:",
-                        locationcode,
-                    )
-
-        with self.failure_lock:
-            self.failed_requests.append(
-                {
-                    "term": f"BRANCH:{locationcode}",
-                    "bookingcountry": bookingcountry,
-                    "url": SELECT_LOCATION_URL,
-                    "error": " | ".join(errors),
-                }
-            )
-        print(
-            "SelectLocation all attempts failed for BRANCH:",
-            locationcode,
-            "|",
-            " | ".join(errors),
-        )
-        return ""
-
     # -- DB ---------------------------------------------------------------------
     def _get_length_limits(self, cursor):
         cursor.execute(
@@ -368,81 +243,55 @@ class sixt:
             for row in cursor.fetchall()
         }
 
-    def insert_batch(self, rows_to_insert):
-        if not rows_to_insert:
-            return True
-        columns = [c for c in rows_to_insert[0].keys() if c != "id"]
+    def insert_one(self, row):
+        """Insert a single row into outputtable immediately (thread-safe)."""
+        columns = [c for c in row.keys() if c != "id"]
         colnames = ",".join(columns)
         placeholders = ",".join(["%s"] * len(columns))
         sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
 
-        argslist = []
-        for row in rows_to_insert:
-            value_row = []
-            for col in columns:
-                value = row.get(col)
-                max_len = self.length_limits.get(col)
-                if isinstance(value, str) and max_len and len(value) > max_len:
-                    print(
-                        "Truncated", col, "from", len(value), "to", max_len,
-                        "for location_code", row.get("location_code")
-                    )
-                    value = value[:max_len]
-                value_row.append(value)
-            argslist.append(tuple(value_row))
+        value_row = []
+        for col in columns:
+            value = row.get(col)
+            max_len = self.length_limits.get(col)
+            if isinstance(value, str) and max_len and len(value) > max_len:
+                print(
+                    "Truncated",
+                    col,
+                    "from",
+                    len(value),
+                    "to",
+                    max_len,
+                    "for location_code",
+                    row.get("location_code"),
+                )
+                value = value[:max_len]
+            value_row.append(value)
 
         with self.db_lock:
             try:
-                execute_batch(self.cursor, sql, argslist)
+                self.cursor.execute(sql, tuple(value_row))
                 self.conn.commit()
-                print(f"BATCH INSERTED {len(argslist)} rows successfully.")
+                print(
+                    "INSERTED |",
+                    "pickup:",
+                    row.get("pickup_location"),
+                    "locationcountry:",
+                    row.get("location_country"),
+                    "| type:",
+                    row.get("location_type"),
+                    "| code:",
+                    row.get("location_code"),
+                )
                 return True
-            except Exception as e:
+            except Exception:
                 try:
                     self.conn.rollback()
                 except Exception:
                     pass
-                print("BATCH INSERT FAILED:", e)
+                print("INSERT FAILED for location_code", row.get("location_code"))
                 self.eHandling()
-                # Edge case: fallback to one-by-one to save the valid rows
-                print("Falling back to one-by-one insert for this batch...")
-                success = False
-                for idx, r in enumerate(argslist):
-                    try:
-                        self.cursor.execute(sql, r)
-                        self.conn.commit()
-                        success = True
-                    except Exception as ex:
-                        try:
-                            self.conn.rollback()
-                        except Exception:
-                            pass
-                        print(f"Single insert failed for location_code {rows_to_insert[idx].get('location_code')}")
-                return success
-
-    def add_to_batch(self, row, rows_list):
-        with self.rows_lock:
-            self.insert_buffer.append(row)
-            rows_list.append(row)
-            
-            if len(self.insert_buffer) >= self.batch_limit:
-                batch_to_insert = self.insert_buffer[:]
-                self.insert_buffer.clear()
-            else:
-                batch_to_insert = None
-
-        if batch_to_insert:
-            self.insert_batch(batch_to_insert)
-
-    def flush_batch(self):
-        with self.rows_lock:
-            if not self.insert_buffer:
-                return
-            batch_to_insert = self.insert_buffer[:]
-            self.insert_buffer.clear()
-        
-        if batch_to_insert:
-            self.insert_batch(batch_to_insert)
+                return False
 
     def update(self, upstatus, refid):
         updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
@@ -527,31 +376,30 @@ class sixt:
         )
 
     def find_match(self, location_list, ss):
+        """Airport-only matching. Non-airport stations are never returned —
+        we only want airport locations, so there is no 'first station'
+        fallback to a City-type result anymore."""
+
         def clean_id(raw_id):
             return raw_id[2:] if raw_id.upper().startswith("S_") else raw_id
 
         stations = [loc for loc in location_list if loc.get("type") == "station"]
+        airport_stations = [
+            loc for loc in stations if "airport" in loc.get("subtypes", [])
+        ]
 
         # Priority 1 - airport station whose title/subtitle contains the IATA code
-        for loc in stations:
-            combined = (loc.get("title", "") + " " + loc.get("subtitle", "")).upper()
-            if "airport" in loc.get("subtypes", []) and ss.upper() in combined:
-                return clean_id(loc["id"]), loc.get("title", "")
-
-        # Priority 2 - any station whose title/subtitle contains the IATA code
-        for loc in stations:
+        for loc in airport_stations:
             combined = (loc.get("title", "") + " " + loc.get("subtitle", "")).upper()
             if ss.upper() in combined:
                 return clean_id(loc["id"]), loc.get("title", "")
 
-        # Priority 3 - first airport station
-        for loc in stations:
-            if "airport" in loc.get("subtypes", []):
-                return clean_id(loc["id"]), loc.get("title", "")
+        # Priority 2 - first airport station (subtitle/title didn't contain the code)
+        if airport_stations:
+            return clean_id(airport_stations[0]["id"]), airport_stations[0].get(
+                "title", ""
+            )
 
-        # Priority 4 - first station
-        if stations:
-            return clean_id(stations[0]["id"]), stations[0].get("title", "")
         return None, None
 
     # -- EXTRACTION ----------------------------------------------------------
@@ -594,29 +442,23 @@ class sixt:
         ss = item["ss"]
         domain = item["domain"]
         bookingcountry = item["bookingcountry"]
-        city = item["city"]
         airport_name = item["airport_name"]
+        airport_country = item["country"]  # ISO2 country the airport itself is in
         proxies = self.get_proxy()
 
         # Attempt 1: IATA code
         location_list = self.fetch_location_list(ss, bookingcountry, proxies)
         locationcode, locationterm = self.find_match(location_list, ss)
 
-        # Attempt 2: city name fallback
+        # Attempt 2: airport name fallback (city has been dropped — airport only)
         if not locationcode:
-            location_list = self.fetch_location_list(city, bookingcountry, proxies)
+            location_list = self.fetch_location_list(
+                airport_name, bookingcountry, proxies
+            )
             locationcode, locationterm = self.find_match(location_list, ss)
 
         if not locationcode:
             return
-
-        # Resolve real location country from SelectLocation API
-        location_country = self.fetch_select_location(
-            locationcode, bookingcountry, proxies
-        )
-        # Fallback: if SelectLocation fails, keep bookingcountry so insert still works
-        if not location_country:
-            location_country = bookingcountry
 
         seen_key = (bookingcountry, locationcode)
         with self.seen_lock:
@@ -624,18 +466,34 @@ class sixt:
                 return
             seen_location_codes.add(seen_key)
 
+        # location_country is the airport's own ISO2 country code from
+        # airportsdata (e.g. AAD -> "DE", CDG -> "FR") — this is location-accurate,
+        # unlike GetBranchRecommendations, which ignores the search term/country
+        # and only reflects the requesting proxy's IP geolocation.
+        location_country = airport_country
+
+        # booking_country is the country we actually queried the Sixt locations
+        # API under (from COUNTRY_CONFIG / item["bookingcountry"]) — kept as its
+        # own separate field, distinct from location_country.
+        booking_country = bookingcountry
+
+        is_airport = True  # find_match() now only ever returns airport stations
+        loctype = "Airport"
+
+        # Hard guard: never insert a non-airport row, even if the matched
+        # title/term text is unexpected.
+        if not is_airport:
+            return
+
         created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        is_airport = "AIRPORT" in (locationterm or airport_name).upper()
-        loctype = "Airport" if is_airport else "City"
-        pickup_loc = ss if is_airport else (locationterm or city)
 
         row = self._build_row(
             refid,
             websitecode,
             source_name,
-            pickup_loc,
-            location_country,  # from SelectLocation country_code
-            bookingcountry,  # from COUNTRY_CONFIG
+            ss,
+            location_country,
+            booking_country,
             locationcode,
             is_airport,
             loctype,
@@ -645,10 +503,14 @@ class sixt:
             created_date,
         )
 
-        self.add_to_batch(row, rows)
+        inserted = self.insert_one(row)
+        if inserted:
+            with self.rows_lock:
+                rows.append(row)
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
+        input_data = build_input_data(self.target_terms)
         if self.target_terms:
             print(
                 "Target retry terms:",
@@ -659,9 +521,6 @@ class sixt:
             refid = result["id"]
             websitecode = result["websitecode"]
             source_name = result["source_name"]
-            target_country = result.get("country")
-            input_data = build_input_data(self.target_terms, target_country)
-            
             rows = []
             seen_location_codes = set()
             try:
@@ -683,8 +542,6 @@ class sixt:
                             future.result()
                         except Exception:
                             self.eHandling()
-
-                    self.flush_batch()
 
                     if rows:
                         self.update(1, refid)
@@ -711,22 +568,19 @@ class sixt:
                 )
 
 
-# -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 239
-    ENDID = 239
+    STARTID = 245
+    ENDID = 245
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
-    MAX_WORKERS = 5
+    MAX_WORKERS = 7
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
     RUN_MISSING_ONLY = 0
-    MISSING_IATA_TERMS = [
-        "ATL",
-    ]
+    MISSING_IATA_TERMS = []
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
     if RUN_MISSING_ONLY:
