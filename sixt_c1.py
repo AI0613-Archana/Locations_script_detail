@@ -627,12 +627,13 @@ class sixt:
         created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         is_airport = "AIRPORT" in (locationterm or airport_name).upper()
         loctype = "Airport" if is_airport else "City"
+        pickup_loc = ss if is_airport else (locationterm or city)
 
         row = self._build_row(
             refid,
             websitecode,
             source_name,
-            ss,
+            pickup_loc,
             location_country,  # from SelectLocation country_code
             bookingcountry,  # from COUNTRY_CONFIG
             locationcode,
@@ -713,8 +714,8 @@ class sixt:
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
     STATUS = "0"
-    STARTID = 236
-    ENDID = 236
+    STARTID = 239
+    ENDID = 239
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
@@ -722,9 +723,9 @@ if __name__ == "__main__":
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
-    RUN_MISSING_ONLY = 0
+    RUN_MISSING_ONLY = 1
     MISSING_IATA_TERMS = [
-        "ATL","ATH","LHR","STN","OZZ","TPA","LGW","FUK","TMM","TRD","FNC"
+        "ATL",
     ]
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
