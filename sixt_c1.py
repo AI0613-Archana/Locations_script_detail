@@ -122,7 +122,7 @@ LOCALE_MAP = {
 }
 
 
-def build_input_data(target_terms=None):
+def build_input_data(target_terms=None, target_country=None):
     """Build (ss, domain, bookingcountry, city, airport_name) rows from airportsdata."""
     airports_db = airportsdata.load("IATA")
     target_terms = {
@@ -136,6 +136,8 @@ def build_input_data(target_terms=None):
             continue
 
         for country, (domain, bookingcountry) in COUNTRY_CONFIG.items():
+            if target_country and target_country.upper() != country.upper():
+                continue
             rows.append(
                 {
                     "ss": iata,
@@ -646,7 +648,6 @@ class sixt:
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
-        input_data = build_input_data(self.target_terms)
         if self.target_terms:
             print(
                 "Target retry terms:",
@@ -657,6 +658,9 @@ class sixt:
             refid = result["id"]
             websitecode = result["websitecode"]
             source_name = result["source_name"]
+            target_country = result.get("country")
+            input_data = build_input_data(self.target_terms, target_country)
+            
             rows = []
             seen_location_codes = set()
             try:
@@ -708,9 +712,9 @@ class sixt:
 
 # -- ENTRY POINT -----------------------------------------------------------------
 if __name__ == "__main__":
-    STATUS = "1"
-    STARTID = 239
-    ENDID = 239
+    STATUS = "0"
+    STARTID = 236
+    ENDID = 236
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
@@ -718,7 +722,7 @@ if __name__ == "__main__":
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
-    RUN_MISSING_ONLY = 1
+    RUN_MISSING_ONLY = 0
     MISSING_IATA_TERMS = [
         "ATL","ATH","LHR","STN","OZZ","TPA","LGW","FUK","TMM","TRD","FNC"
     ]
