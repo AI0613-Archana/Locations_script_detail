@@ -7,11 +7,29 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import airportsdata
-
 import psycopg2
-from curl_cffi import requests
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
+from curl_cffi import requests
+browser_type = [
+    "chrome99",
+    "chrome100",
+    "chrome101",
+    "chrome104",
+    "chrome107",
+    "chrome110",
+    "chrome99_android",
+    "edge99",
+    "edge101",
+    "safari15_3",
+    "safari15_5",
+]
+browser = random.choice(browser_type)
+ses = requests.Session()
+ses.impersonate = browser
+ses.timeout = 30
+ses.verify = False
+
 
 load_dotenv()
 DB_CONFIG = {
@@ -33,9 +51,9 @@ COUNTRY_CONFIG = {
     # "BR": ("sixt.com.br", "BR"),
     # "CA": ("sixt.ca",     "CA"),
     # "CH": ("sixt.ch",     "CH"),
-    "CN": ("sixt.com.cn", "CN"),
+    # "CN": ("sixt.com.cn", "CN"),
     # "DE": ("sixt.de",     "DE"),
-    # "DK": ("sixt.dk",     "DK"),
+    "DK": ("sixt.dk",     "DK"),
     # "EE": ("sixt.ee",     "EE"),
     # "EG": ("sixt.com",    "EG"),
     # "ES": ("sixt.es",     "ES"),
@@ -77,10 +95,10 @@ LOCALE_MAP = {
     # "BE": "nl-BE,nl",
     # "CA": "en-CA,en",  # confirmed from live capture
     # "CH": "de-CH,de",
-    "CN": "zh-CN,zh",
+    # "CN": "zh-CN,zh",
     # "CZ": "cs-CZ,cs",
     # "DE": "de-DE,de",
-    # "DK": "da-DK,da",
+    "DK": "da-DK,da",
     # "ES": "es-ES,es",
     # "FR": "fr-FR,fr",
     # "GB": "en-GB,en",
@@ -219,7 +237,7 @@ class sixt:
 
     def load(self, term, bookingcountry, proxies):
         headers = self.make_headers(bookingcountry)
-        return requests.get(
+        return ses.get(
             BASE_URL,
             params={"term": term},
             headers=headers,
@@ -569,9 +587,9 @@ class sixt:
 
 
 if __name__ == "__main__":
-    STATUS = "0"
-    STARTID = 245
-    ENDID = 245
+    STATUS = "1"
+    STARTID = 236
+    ENDID = 236
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     PROXYID = "60"
@@ -580,7 +598,7 @@ if __name__ == "__main__":
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
     RUN_MISSING_ONLY = 0
-    MISSING_IATA_TERMS = []
+    MISSING_IATA_TERMS = ["ATL"]
 
     target_terms = MISSING_IATA_TERMS if RUN_MISSING_ONLY else []
     if RUN_MISSING_ONLY:
