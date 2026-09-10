@@ -12,7 +12,7 @@ import airportsdata
 import psycopg2
 from curl_cffi import requests
 from dotenv import load_dotenv
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_batch
 
 load_dotenv()
 DB_CONFIG = {
@@ -182,6 +182,9 @@ class sixt:
         self.seen_lock = threading.Lock()
         self.rows_lock = threading.Lock()
         self.db_lock = threading.Lock()
+
+        self.insert_buffer = []
+        self.batch_limit = 50
 
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
@@ -363,57 +366,81 @@ class sixt:
             for row in cursor.fetchall()
         }
 
-    def insert_one(self, row):
-        """Insert a single row into outputtable immediately (thread-safe)."""
-        columns = [c for c in row.keys() if c != "id"]
+    def insert_batch(self, rows_to_insert):
+        if not rows_to_insert:
+            return True
+        columns = [c for c in rows_to_insert[0].keys() if c != "id"]
         colnames = ",".join(columns)
         placeholders = ",".join(["%s"] * len(columns))
         sql = f"INSERT INTO {self.outputtable} ({colnames}) VALUES ({placeholders})"
 
-        value_row = []
-        for col in columns:
-            value = row.get(col)
-            max_len = self.length_limits.get(col)
-            if isinstance(value, str) and max_len and len(value) > max_len:
-                print(
-                    "Truncated",
-                    col,
-                    "from",
-                    len(value),
-                    "to",
-                    max_len,
-                    "for location_code",
-                    row.get("location_code"),
-                )
-                value = value[:max_len]
-            value_row.append(value)
+        argslist = []
+        for row in rows_to_insert:
+            value_row = []
+            for col in columns:
+                value = row.get(col)
+                max_len = self.length_limits.get(col)
+                if isinstance(value, str) and max_len and len(value) > max_len:
+                    print(
+                        "Truncated", col, "from", len(value), "to", max_len,
+                        "for location_code", row.get("location_code")
+                    )
+                    value = value[:max_len]
+                value_row.append(value)
+            argslist.append(tuple(value_row))
 
         with self.db_lock:
             try:
-                self.cursor.execute(sql, tuple(value_row))
+                execute_batch(self.cursor, sql, argslist)
                 self.conn.commit()
-                print(
-                    "INSERTED |",
-                    "pickup:",
-                    row.get("pickup_location"),
-                    "| type:",
-                    row.get("location_type"),
-                    "| code:",
-                    row.get("location_code"),
-                    "| location_country:",
-                    row.get("location_country"),
-                    "| booking_country:",
-                    row.get("booking_country"),
-                )
+                print(f"BATCH INSERTED {len(argslist)} rows successfully.")
                 return True
-            except Exception:
+            except Exception as e:
                 try:
                     self.conn.rollback()
                 except Exception:
                     pass
-                print("INSERT FAILED for location_code", row.get("location_code"))
+                print("BATCH INSERT FAILED:", e)
                 self.eHandling()
-                return False
+                # Edge case: fallback to one-by-one to save the valid rows
+                print("Falling back to one-by-one insert for this batch...")
+                success = False
+                for idx, r in enumerate(argslist):
+                    try:
+                        self.cursor.execute(sql, r)
+                        self.conn.commit()
+                        success = True
+                    except Exception as ex:
+                        try:
+                            self.conn.rollback()
+                        except Exception:
+                            pass
+                        print(f"Single insert failed for location_code {rows_to_insert[idx].get('location_code')}")
+                return success
+
+    def add_to_batch(self, row, rows_list):
+        with self.rows_lock:
+            self.insert_buffer.append(row)
+            rows_list.append(row)
+            
+            if len(self.insert_buffer) >= self.batch_limit:
+                batch_to_insert = self.insert_buffer[:]
+                self.insert_buffer.clear()
+            else:
+                batch_to_insert = None
+
+        if batch_to_insert:
+            self.insert_batch(batch_to_insert)
+
+    def flush_batch(self):
+        with self.rows_lock:
+            if not self.insert_buffer:
+                return
+            batch_to_insert = self.insert_buffer[:]
+            self.insert_buffer.clear()
+        
+        if batch_to_insert:
+            self.insert_batch(batch_to_insert)
 
     def update(self, upstatus, refid):
         updateq = f"UPDATE {self.inputtable} SET status=%s WHERE id=%s"
@@ -615,10 +642,7 @@ class sixt:
             created_date,
         )
 
-        inserted = self.insert_one(row)
-        if inserted:
-            with self.rows_lock:
-                rows.append(row)
+        self.add_to_batch(row, rows)
 
     # -- MAIN -------------------------------------------------------------------
     def main(self, resultset):
@@ -654,6 +678,8 @@ class sixt:
                             future.result()
                         except Exception:
                             self.eHandling()
+
+                    self.flush_batch()
 
                     if rows:
                         self.update(1, refid)
