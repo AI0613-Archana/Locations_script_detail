@@ -44,7 +44,7 @@ BASE_URL = "https://web-api.orange.sixt.com/v1/locations"
 
 COUNTRY_CONFIG = {
     # ISO2: (domain, bookingcountry)
-    "AE": ("sixt.ae",     "AE"),
+    # "AE": ("sixt.ae",     "AE"),
     # "AT": ("sixt.at",     "AT"),
     # "AU": ("sixt.com.au", "AU"),
     # "BE": ("sixt.be",     "BE"),
@@ -53,6 +53,7 @@ COUNTRY_CONFIG = {
     # "CA": ("sixt.ca",     "CA"),
     # "CH": ("sixt.ch",     "CH"),
     # "CN": ("sixt.com.cn", "CN"),
+    "CZ": ("sixt.com",    "CZ"),
     # "DE": ("sixt.de",     "DE"),
     # "DK": ("sixt.dk",     "DK"),
     # "EE": ("sixt.ee",     "EE"),
@@ -90,14 +91,14 @@ COUNTRY_CONFIG = {
 }
 
 LOCALE_MAP = {
-    "AE": "ar-AE,ar",
+    # "AE": "ar-AE,ar",
     # "AT": "de-AT,de",
     # "AU": "en-AU,en",
     # "BE": "nl-BE,nl",
     # "CA": "en-CA,en",  # confirmed from live capture
     # "CH": "de-CH,de",
     # "CN": "zh-CN,zh",
-    # "CZ": "cs-CZ,cs",
+    "CZ": "cs-CZ,cs",
     # "DE": "de-DE,de",
     # "DK": "da-DK,da",
     # "ES": "es-ES,es",
@@ -166,7 +167,7 @@ class sixt:
         self.proxyid = proxyid
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 55  # update to Sixt's actual websitecode
+        self.websitecode = 53  # update to Sixt's actual websitecode
         self.max_workers = max_workers
         self.target_terms = target_terms or []
 
@@ -588,13 +589,13 @@ class sixt:
 
 
 if __name__ == "__main__":
-    STATUS = "0"
-    STARTID = 241
-    ENDID = 241
+    STATUS = "1"
+    STARTID = 301
+    ENDID = 301
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
-    PROXYID = "59"
-    MAX_WORKERS = 6
+    PROXYID = "60"
+    MAX_WORKERS = 15
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
