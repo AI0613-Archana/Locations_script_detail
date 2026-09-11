@@ -9,7 +9,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
 from dotenv import load_dotenv
 from curl_cffi import requests
-
+ses = requests.Session(impersonate='chrome')
 # from base_scraper import BaseScraper
 from datetime import datetime, timezone
 
@@ -36,7 +36,7 @@ class rentalcars:
         self.proxyid = proxyid
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 28
+        self.websitecode = 73
         self.is_dc_input = False
         self.cursor.execute(
             f"SELECT proxy FROM proxy_list WHERE status IN ({self.proxyid})"
@@ -46,7 +46,7 @@ class rentalcars:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
             (str(self.websitecode), status, startid, endid),
         )
@@ -58,7 +58,7 @@ class rentalcars:
         return {"https": f"http://{proxy_str}"}
 
     def load(self, url, headers, proxies):
-        return requests.get(url, timeout=15, headers=headers)
+        return ses.get(url, timeout=15, headers=headers)
 
     def insert(self, chunks):
 
@@ -180,7 +180,7 @@ class rentalcars:
                 # else:
                 self.extraction(refid, country, websitecode, source_name)
             except Exception as e:
-
+                # raise
                 # self.log(refid, f"failed: {e}")
                 self.update(2, refid)
 
@@ -198,36 +198,28 @@ class rentalcars:
         print("inside extraction")
 
         cookies = {
-            'pcm_consent': 'analytical%3Dtrue%26countryCode%3DIN%26consentId%3D601acb98-d107-4ca7-a28c-1a48ff5165db%26consentedAt%3D2026-06-16T05%3A12%3A40.117Z%26expiresAt%3D2026-12-13T05%3A12%3A40.117Z%26implicit%3Dtrue%26marketing%3Dtrue%26regionCode%3DTN%26regulation%3Dnone%26legacyRegulation%3Dnone',
-            'bkng_sso_ses': 'e30',
-            'bkng_sso_session': 'e30',
-            '_gcl_au': '1.1.1889586477.1781586767',
-            'bkng_prue': '1',
-            '_yjsu_yjad': '1781586767.34baa05c-ca26-435c-b5af-ff2f9c58d030',
-            'FPID': 'FPID2.2.1w7nYZLBgyBwIrDTfKK%2Faakw8yyKAocGkeryIMrAswg%3D.1781586767',
-            'FPAU': '1.1.1889586477.1781586767',
-            'FPLC': 'UWIYpN4%2BzG%2BluzoJUwkx%2FxDQjX9Cq7xAtHxEur%2BCZ%2F%2FOEtLw737xA7qblxhec1olLo%2BfED0yO92GNOVDNOIdNy8P3TP2%2BJ%2Fmrby54IqM1NZU6p1xU%2FRA5bdoXXdzrg%3D%3D',
+            'pcm_consent': 'analytical%3Dtrue%26countryCode%3DIN%26consentId%3De9d3f90c-9701-45cd-97d1-e4421a34110f%26consentedAt%3D2026-09-11T06%3A39%3A37.523Z%26expiresAt%3D2027-03-10T06%3A39%3A37.523Z%26implicit%3Dtrue%26marketing%3Dtrue%26regionCode%3DTN%26regulation%3Dnone%26legacyRegulation%3Dnone',
             'cors_js': '1',
             'BJS': '-',
-            '_gid': 'GA1.2.1711172287.1781586774',
-            'pcm_personalization_disabled': '0',
-            'cto_bundle': 'jZAmWF9sUDVrNzRLayUyRnAzSldvbkd1cWxHSDZuTmklMkZaYTF1TnpNWmhzRXVJMHQyVG9NM2U1NFklMkYlMkZ4dTg1QTRtYnlmcHNhJTJGSyUyRm1CZmdDSE9ac3VzSGlBQVVQVDg3dlRNZ2VzakxIQUZTZ2ttJTJCbEN4UUFQemw0R3VobUUlMkJhRXFlQUp5JTJGSQ',
-            '_rdt_uuid': '1781586767152.e8b560e5-77b9-4543-8a4a-9d71011c5e56',
-            '__gads': 'ID=992c061e6617eac7:T=1781586766:RT=1781587200:S=ALNI_Mbjlr9VtLq1wnwI9zPO99kPBBfX4Q',
-            '__gpi': 'UID=0000146e434266ce:T=1781586766:RT=1781587200:S=ALNI_MbZJViEzC7nHpb_5dqbLiUaHVmONw',
-            '__eoi': 'ID=1cc2749210d2d1db:T=1781586766:RT=1781587200:S=AA-Afjac5jzpaLP91Yz0dx55TKf2',
-            'g_state': '{"i_l":0,"i_ll":1781587284625,"i_b":"kKGtDIhILlZ1mqYCX0ZJO+NsHXpeOWTNA0f4QFq5fCw","i_e":{"enable_itp_optimization":0},"i_et":1781587195920}',
-            'bk_nav_search': '%7B%22u%22%3A%22https%3A%2F%2Fwww.booking.com%2Fcars%2Findex.en-gb.html%3Flabel%3Dgen173nr-10CAEoggI46AdIM1gEaGyIAQGYATO4ARnIAQzYAQPoAQH4AQGIAgGoAgG4Asq2w9EGwAIB0gIkNTk4MTYwYzctZDkwMi00N2E5LTlkYzctYTMwZmJmYzNmMjRk2AIB4AIB%26sid%3D96399a8f22c4f2fa18f24c3b6571317d%26aid%3D304142%22%2C%22t%22%3A1781587629604%2C%22p%22%3A%22index%22%7D',
-            'OptanonConsent': 'implicitConsentCountry=nonGDPR&implicitConsentDate=1781586764475&isGpcEnabled=0&datestamp=Tue+Jun+16+2026+10%3A57%3A10+GMT%2B0530+(India+Standard+Time)&version=202501.2.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=74c9d612-9d7f-4b18-926f-3d256c1d8147&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A1%2CC0004%3A1&AwaitingReconsent=false',
-            '_ga': 'GA1.1.965424957.1781586767',
-            '_ga_A12345': 'GS2.1.s1781586767$o1$g1$t1781587630$j34$l0$h941685780',
-            '_uetsid': '03f1d0d0694211f1abc7737fcf2f9680',
-            '_uetvid': '03f209c0694211f19759df56ce1124f9',
-            'bkng': '11UmFuZG9tSVYkc2RlIyh9Yaa29%2F3xUOLbca8KLfxLPecyWBQgff1Xz9xpu%2Fvg3EeoBpTCJv6lHnUpabvz4MYixMx%2Bj%2FohcHNyIvh2pgZ86AJZ6okrT%2F5WG4noXYtB%2FYnopW1q94EOkQASVXkqpLBJgy6vdup9mVK2u3DfIASDB%2FxXqNYeljNj%2B9f%2Bbj3bnww7JifkM3CDCUs%3D',
-            'bkng_sso_auth': 'CAIQi4nT0gIaZqdC/c1tXnV8WdyyL4+nPwU+Z8rbRTuPP4RVZ7f3mmUSvIWulqhcTiSGBGuHGcc+kri8kAh4k7VmiGFhb2JHApxg8TuyNuP/H/HeD22O4cglI+hTGtLLTxkuQWiyig/w9o9HvJxVEg==',
-            'aws-waf-token': '2862bf10-180c-4518-bd72-0c7f2807a9b3:HgoAu/slHEMQAAAA:BzTnSw4hsUUD5Ie+0j+vGsSf8Xw3m43l14ce4uhQFc3TbQtzuTzud3yr4afH+HLQbsier06kqKAmcWi64VXZN2X57OKxDdCKFdtCHu5E14cSigsbzJ2fB1Wgc6ukvH6/j4eTOU/JHWpuTor+7pCFoCiR5p0WR54WbEVjHCUYIOp1Cpvsjz914Qh/JcIZmKuH+EP1k1GtPzdVg+MpznlhOnUkhyG0MM3DY87KnUMbAT2RuDidAso+57krOSnaROaYQEE=',
+            'bkng_sso_ses': 'e30',
+            'bkng_sso_session': 'e30',
+            '_gid': 'GA1.2.2126024718.1789108780',
+            '_gcl_au': '1.1.20316885.1789108781',
+            'FPID': 'FPID2.2.ZrAOZBaOdmzs97QNt%2FrNC11Y4NyKq%2B5mfdluocg6fS0%3D.1789108780',
+            'FPAU': '1.1.20316885.1789108781',
+            'FPLC': 'WImksRMXT%2B5r6czidbneDl51KPw0nYIQgSUmbo0wQpZl%2B4WNO69mVg12IjIMxpuTmdLYiEBG%2FHJ9FbQfBKqyg53BqAwh3oG%2BQhdBXZ0l1QxDm9IFT%2BZy%2B8ytkqx1oA%3D%3D',
+            '_yjsu_yjad': '1789108782.89d6e4f9-000e-4375-afcf-d28c60cbdaa6',
+            'persisted_lang': 'en',
+            'persisted_currency': 'INR',
+            'OptanonConsent': 'isGpcEnabled=0&datestamp=Fri+Sep+11+2026+12%3A31%3A01+GMT%2B0530+(India+Standard+Time)&version=202501.2.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=4549a107-9045-41f5-8d54-c43a5940e74f&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&implicitConsentCountry=nonGDPR&implicitConsentDate=1789108780340&groups=C0001%3A1%2CC0002%3A1%2CC0004%3A1&AwaitingReconsent=false',
+            '_ga': 'GA1.1.1820026905.1789108780',
+            '_ga_A12345': 'GS2.1.s1789108781$o1$g1$t1789110062$j60$l0$h82012277',
+            'bkng': '11UmFuZG9tSVYkc2RlIyh9Yaa29%2F3xUOLbwcLxQQ4VaCrVZg3LUReM0B17KTp2uAas3vNx8lYLSRL6XqRH74KSAYxWdycpftvdL1pMY1%2BAh8rrgOwAItYC5wO5hIoBU5OUUv3KY3KgxS1w3OiLyOqbWIn6%2FG%2BeFh1OsWw12CMEwAarBfEtkoLOpY018K%2Bu2%2BFPvqGveS3mN2k%3D',
+            '_uetsid': '91f5f600adab11f183371bd53957fcdd',
+            '_uetvid': '91f60fa0adab11f1911963f088f7b931',
+            'bkng_sso_auth': 'CAIQ6bn9wwIaZj9pmZihvhgHkheR3IJmPUfZi/PmxR0EOupmMbSQEJQ/jaWvAezSCmXxYtVADhOSsWMkrlSUUN2Ngg31pIHFblPLxOwVF8egJ+2sILeniOidOX5Yit5lrSIU9XGthFm3FbzgV4tZVA==',
+            'aws-waf-token': '02510481-432a-4f97-97a9-54583bdac481:HgoAdgcxSgdQAAAA:AArPkFSbQ7twQVaeSs6WSul7eYJsrDNFcdfBlL1cQSyuzPHL2Jdc0rykK6G2jJrnxhECFCPgtEwQotKO2tCN7GHIo53EgLx5GAyD2y0s7S6ceJ+iPG5Prp+dhITvGY6m4PGQYt7SsbpPJ43kJrB23iIq/FTWHnmHu0/WnalAvlhM+risXbBZh1X1mafUeD63N4UsDw+MPzHrfKDVzWnbVK7SiTeeRNErutmxx2UeKKfT+EeC7l3MN+HxWaZ79C6EUfBrrtaQ1sTQfFp8ZgoIjy581G3UspxJA9E+iHGcUJKIt2xZIjWb9e+HkAtTXmaabq0bY8PDYsnMD8xk3qjMukWFFQY=',
         }
-
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'en-GB,en;q=0.9',
@@ -252,7 +244,7 @@ class rentalcars:
             'aid': '304142',
         }
 
-        response = requests.get('https://www.booking.com/cars/sitemap.en-gb.html', params=params, cookies=cookies, headers=headers)
+        response = ses.get('https://www.booking.com/cars/sitemap.en-gb.html', params=params, cookies=cookies, headers=headers)
 
         # open("booking_1sthit.html","w").write(response.text)
 
@@ -267,8 +259,8 @@ class rentalcars:
         rows = []
 
         for country in countries:
-
-            if 'sitemap' in country and 'https' in country and '<span>' not in country:
+            # print('country----', country)
+            if 'sitemap' in country or 'https' in country or '<span>' not in country:
                 country_url = re.search(r'(?s)<a href="(.*?html)\?',country).group(1)
                 print(country_url)
 
@@ -296,14 +288,14 @@ class rentalcars:
                     'aid': '304142',
                 }
 
-                response = requests.get(
+                response = ses.get(
                     country_url,
                     params=params,
                     cookies=cookies,
                     headers=headers,
                 )
-                # print(response.status_code)
-                # open("booking_2ndhit.html","w").write(response.text)
+                print(response.status_code)
+                open("booking_2ndhit.html","w").write(response.text)
 
                 if re.search(r'(?s)Airports in (.*?)Regions in',response.text):
 
@@ -334,12 +326,14 @@ class rentalcars:
 
                         params = {
                             'language': 'en',
-                            'cor': 'in',
+                            'cor': 'us',
                             'aid': '304142',
                             'term': airport_code.upper(),
                         }
 
-                        response = requests.get('https://cars.booking.com/api/location-suggestions', params=params, cookies=cookies, headers=headers)
+                        response = ses.get('https://cars.booking.com/api/location-suggestions', params=params, cookies=cookies, headers=headers)
+                        print("r_location_suggestions",response.status_code)
+                        open("r_location_suggestions.html","w").write(response.text)
 
                         print("airport name:", airport_code.upper())
 
@@ -349,11 +343,12 @@ class rentalcars:
                             )
                             if aa['placeType'] == 'A':
                                 name=aa['name']
-                                ter1=aa['lat']
-                                ter2=aa['lng']
-                                locationterm=f'{name}|{ter1}|{ter2}'
-                                city = aa['city']
-                                region = aa['region']
+                                latitude=aa['lat']
+                                longitude=aa['lng']
+                                locationterm=f'{name}'
+                                city = aa.get('city', '')
+                                region = aa.get('region', '')
+                                location_country = aa.get('countryIso', '')
                                 print("locationname :",airport_code.upper())
                                 print("locationterm :",locationterm)
                                 print("-"*10)
@@ -364,6 +359,8 @@ class rentalcars:
                                     location_type = "airport"
                                 else:
                                     location_type = "city"
+                                if not region:
+                                    region = ''
                                 # if "latitude" in str(longitude1):
                                 #     longitude = re.sub('"postcode":.*', "", str(longitude1))
                                 # else:
@@ -378,22 +375,27 @@ class rentalcars:
                                     "source_name": source_name,
                                     "website_code": websitecode,
                                     "pickup_location": name,
-                                    "location_country": country,
+                                    "location_country": location_country,
                                     "location_code": "",
                                     "is_airport": True,
                                     "created_date": created_date,
                                     "location_type": location_type,
                                     "city": city,
-                                    "region": region,
+                                    # "region": region,
                                     "priority_level": "",
                                     "location_term": locationterm,
                                     "location_name": name,
+                                    "name": name,
+                                    "latitude": latitude,
+                                    "longitude": longitude,
+                                    "booking_country": country,
+
                                 }
                                 rows.append(row)
-            self.insert(rows)
-            self.update(1, refid)
-        else:
-            self.update(2, refid)
+                self.insert(rows)
+                self.update(1, refid)
+            else:
+                self.update(2, refid)
 
 
 if __name__ == "__main__":
@@ -401,7 +403,7 @@ if __name__ == "__main__":
     while RETRY < 20:
         SC = None
         try:
-            SC = rentalcars(1, 5, 5, "input_locations", "locations", False, "1,2,3")
+            SC = rentalcars(2, 178, 178, "input_locations", "locations", False, "60")
             # (
             #     script,
             #     status,
