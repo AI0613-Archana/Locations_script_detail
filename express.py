@@ -45,7 +45,7 @@ class express:
         self.cursor.execute(
             f"""
             SELECT * FROM {self.inputtable}
-            WHERE websitecode = %s::text AND status = %s AND id BETWEEN %s AND %s
+            WHERE websitecode = %s AND status = %s AND id BETWEEN %s AND %s
         """,
             (str(self.websitecode), status, startid, endid),
         )
@@ -59,6 +59,10 @@ class express:
         if not proxy_str:
             return {}
         proxy_url = proxy_str if "://" in proxy_str else f"http://{proxy_str}"
+        
+        #static pl proxy
+        proxy_url = 'rentalcarspxys:SyaP2wdkIHybBt6W_country-pl@geo.iproyal.com:12321'
+
         return {"http": proxy_url, "https": proxy_url}
 
     def load(self, url, headers, proxies):
@@ -251,13 +255,15 @@ class express:
             location_type = "Airport" if is_airport else "City"
             created_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
+            latitude = place.get('gpsCoords',{}).get('lat')
+            longitude = place.get('gpsCoords',{}).get('lon')
             seen_location_codes.add(location_code)
             row = {
                 "id": refid,
                 "source_name": source_name,
                 "website_code": websitecode,
                 "pickup_location": location_name,
-                "location_country": country or "PL",
+                "location_country": country,
                 "location_code": location_code,
                 "is_airport": is_airport,
                 "created_date": created_date,
@@ -267,6 +273,10 @@ class express:
                 "priority_level": "",
                 "location_term": location_name,
                 "location_name": location_name,
+                "name" : location_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "booking_country": country,
             }
             rows.append(row)
 
@@ -274,27 +284,27 @@ class express:
 if __name__ == "__main__":
     SC = None
     try:
-        # SC = express(0, 162, 162, "input_locations", "locations", False, "20")
+        SC = express(0, 162, 162, "input_locations", "locations", False, "60")
 
-        (
-            script,
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        ) = sys.argv
-        SC = express(
-            status,
-            startid,
-            endid,
-            inputtable,
-            outputtable,
-            offline,
-            proxyid,
-        )
+        # (
+        #     script,
+        #     status,
+        #     startid,
+        #     endid,
+        #     inputtable,
+        #     outputtable,
+        #     offline,
+        #     proxyid,
+        # ) = sys.argv
+        # SC = express(
+        #     status,
+        #     startid,
+        #     endid,
+        #     inputtable,
+        #     outputtable,
+        #     offline,
+        #     proxyid,
+        # )
     except Exception:
         if SC:
             SC.eHandling()
