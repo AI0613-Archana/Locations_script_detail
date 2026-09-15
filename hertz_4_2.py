@@ -28,7 +28,7 @@ DB_CONFIG = {
 WORDWHEEL_URL = "https://loc.hertz.com/locations/WordWheel"
 
 DIALECT_MAP = {
-    "AU":"enAU",
+    "AU":"enUS",
     "AT": "deDE",
     "BE": "nlNL",
     "BG": "bgBG",
