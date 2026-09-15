@@ -28,10 +28,12 @@ DB_CONFIG = {
 WORDWHEEL_URL = "https://loc.hertz.com/locations/WordWheel"
 
 DIALECT_MAP = {
+    "AU":"enAU",
     "AT": "deDE",
     "BE": "nlNL",
     "BG": "bgBG",
     "BH": "enGB",
+    "CA": "enUS",
     "CH": "deDE",
     "CN": "zhCN",
     "CZ": "csCZ",
@@ -505,8 +507,8 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 102
-    ENDID = 102
+    STARTID = 307
+    ENDID = 307
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
