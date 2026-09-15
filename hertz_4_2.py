@@ -36,7 +36,7 @@ DIALECT_MAP = {
     "CN": "zhCN",
     "CZ": "csCZ",
     "DE": "deDE",
-    "DK": "daDK",
+    "DK": "dkDK",
     "EE": "etEE",
     "ES": "esES",
     "FI": "fiFI",
@@ -94,7 +94,7 @@ class hertz_4_2:
         ]
         self.conn = psycopg2.connect(**DB_CONFIG)
         self.cursor = self.conn.cursor(cursor_factory=RealDictCursor)
-        self.websitecode = 37
+        self.websitecode = 36
         self.is_dc_input = False
         self.iata_codes = set(airportsdata.load("IATA").keys())
         self.active_iata_codes = self.build_iata_codes()
@@ -505,13 +505,13 @@ class hertz_4_2:
 
 if __name__ == "__main__":
     STATUS = "any"
-    STARTID = 296
-    ENDID = 296
+    STARTID = 102
+    ENDID = 102
     INPUTTABLE = "input_locations"
     OUTPUTTABLE = "locations"
     OFFLINE = False
     PROXYID = "60"
-    MAX_WORKERS = 30
+    MAX_WORKERS = 20
 
     # 0 = normal run for all IATA codes.
     # 1 = retry only the failed/missing IATA codes below.
